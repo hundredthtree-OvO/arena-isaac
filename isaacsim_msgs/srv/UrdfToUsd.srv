@@ -1,0 +1,10 @@
+string name
+string urdf_path
+string robot_model
+bool no_localization
+string base_frame
+string odom_frame
+geometry_msgs/Pose pose
+string cmd_vel_topic
+---
+string usd_path

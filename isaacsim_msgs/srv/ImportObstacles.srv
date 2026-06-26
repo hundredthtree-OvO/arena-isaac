@@ -1,0 +1,5 @@
+string name
+string usd_path
+geometry_msgs/Pose pose
+---
+bool ret

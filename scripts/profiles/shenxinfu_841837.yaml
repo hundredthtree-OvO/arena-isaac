@@ -1,0 +1,212 @@
+# shenxinfu_841837 profile: voxel guard + manual LiDAR + actual odom/TF.
+# Default run from repo root:
+#   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge voxel_guard
+#   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml spawn
+#   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml teleop
+
+bridge:
+  isaac_path: $HOME/resources/isaac-sim-4.5.0
+  log_level: info
+  idle_fps: 5
+  active_fps: 30
+  mem_log_sec: 30
+  enable_people_stack: false
+  enable_material_stack: false
+  enable_navmesh: false
+scene:
+  mode: usd
+  name: shenxinfu_841837
+  root_path: /World/shenxinfu_841837
+  usd_path: /home/stardust/resources/arena_ws/arena_assets/scenes/real/shenxinfu/841837/start.usda
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  yaw: 0.0
+robot:
+  name: xms_mecanum
+  cmd_vel_topic: /cmd_vel
+  odom_topic: /odom
+  odom_frame: odom
+  base_frame: base_link
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  yaw: 0.0
+  cmd_vel_applied_topic: /cmd_vel_applied
+  use_sim_time: true
+robot_geometry:
+  auto_footprint: false
+  z_min: -0.1
+  z_max: 0.45
+  include_keywords: []
+  exclude_keywords:
+  - arm
+  - gripper
+  - finger
+  - camera
+  - lidar
+  - laser
+  - sensor
+  - marker
+  - debug
+lidar:
+  mount_source: manual
+  front_x: 0.3
+  rear_x: -0.3
+  y: 0.0
+  z: 0.2
+  front_yaw: 0.0
+  rear_yaw: 3.141592653589793
+  front_frame: front_laser_link
+  rear_frame: rear_laser_link
+  visualize: true
+odom_tf:
+  publish_actual: true
+  publish_sensor_static_tf: true
+proxy:
+  enable_scene_collision_repair: true
+  repair_mode: safe
+  source: auto
+  config_path: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.proxies.yaml
+  auto_write_config: true
+  visible: true
+  enable_wall_proxy: true
+  enable_door_proxy: true
+  door_default_enabled: false
+  wall_default_enabled: true
+collision2d:
+  config_path: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.collision2d.yaml
+  debug_svg: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.collision2d.svg
+  resolution: 0.03
+  refresh_sec: 1.0
+voxel:
+  map_path: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.voxel.json.gz
+  debug_svg: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.voxel.svg
+  debug_pcd: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.voxel.pcd
+  resolution: 0.05
+  sample_step: 0.05
+  z_min: 0.05
+  z_max: 1.2
+  refresh_sec: 1.0
+  build_timeout: 900.0
+  max_faces_per_mesh: 100000
+  max_samples_per_mesh: 250000
+  max_stored_voxels: 300000
+  max_debug_stage_points: 30000
+  create_stage_debug_points: true
+  stage_debug_path: ''
+  skip_keywords:
+  - _collision_proxy
+  - /World/robots
+  - groundPlane
+  - ground_plane
+  - /Light
+  - dlight
+  - downlight
+  - camera
+  - lidar
+  - sensor
+  - Ceiling
+  - Floor_Floor
+  - /Floor/
+  - Tuyere
+  include_keywords: []
+guard:
+  backend: voxel
+  length: 0.7
+  width: 0.42
+  margin: 0.02
+  z_max: 1.0
+  log_sec: 5.0
+  block_log_sec: 2.0
+  overlap_policy: escape
+  escape_epsilon: 0.0001
+teleop:
+  linear: 0.2
+  lateral: 0.2
+  angular: 0.5
+phases:
+  edit:
+    proxy_source: auto
+    proxy_visible: true
+    auto_write_config: true
+    enable_guard: false
+    overlap_policy: escape
+    guard_backend: proxy
+  verify:
+    proxy_source: config
+    proxy_visible: true
+    auto_write_config: false
+    enable_guard: false
+    overlap_policy: escape
+    guard_backend: proxy
+  guard:
+    proxy_source: config
+    proxy_visible: false
+    auto_write_config: false
+    enable_guard: true
+    overlap_policy: escape
+    guard_backend: proxy
+  strict:
+    proxy_source: config
+    proxy_visible: true
+    auto_write_config: false
+    enable_guard: true
+    overlap_policy: block
+    guard_backend: proxy
+  guard2d:
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: false
+    enable_guard: true
+    overlap_policy: escape
+    guard_backend: 2d
+  strict2d:
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: false
+    enable_guard: true
+    overlap_policy: block
+    guard_backend: 2d
+  debug2d:
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: false
+    enable_guard: true
+    overlap_policy: escape
+    guard_backend: 2d
+  voxel_build:
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: false
+    enable_guard: false
+    overlap_policy: escape
+    guard_backend: voxel
+  voxel_guard:
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: false
+    enable_guard: true
+    overlap_policy: escape
+    guard_backend: voxel
+  voxel_strict:
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: false
+    enable_guard: true
+    overlap_policy: block
+    guard_backend: voxel
+  voxel_debug:
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: false
+    enable_guard: true
+    overlap_policy: escape
+    guard_backend: voxel

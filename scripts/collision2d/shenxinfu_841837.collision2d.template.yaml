@@ -1,0 +1,23 @@
+schema_version: 1
+scene: shenxinfu_841837
+scene_root_path: /World/shenxinfu_841837
+frame: world
+resolution: 0.03
+notes:
+  - "Template only. Prefer generating a first draft with: python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml collision2d init"
+  - "Use walls/partitions as line segments. Do not use one room-level bbox as a wall."
+  - "Doors default to ignore/open; set state=closed and enabled=true only if the door should block the robot."
+robot:
+  footprint:
+    length: 0.80
+    width: 0.60
+    margin: 0.05
+walls: []
+partitions: []
+objects: []
+doors: []
+ignored_from_proxy_yaml: []
+manual_todo:
+  - "Add outer walls as four line segments."
+  - "Add stall partitions as line segments."
+  - "Add toilets/urinals/fixtures as boxes if missing."
