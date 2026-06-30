@@ -15,3 +15,6 @@ IsaacLab
 *.pdf
 test.py
 checkpoint.py
+
+# 文件夹
+ros2isaacsim/ros2isaacsim/assets/
