@@ -1,0 +1,42 @@
+agent_0:
+  character_name: original_male_adult_construction_05
+  controller_stats: false
+  goal_pose:
+  - 42.277767411890736
+  - 22.70467415906639
+  - 0.0
+  initial_pose:
+  - 0.30773374877235415
+  - 56.75042036110872
+  - 0.0
+  orientation: 62.68099121181454
+  stage_prefix: character_0
+  velocity: 0.407306046952996
+agent_1:
+  character_name: original_male_adult_construction_05
+  controller_stats: false
+  goal_pose:
+  - 3.18201075735018
+  - 21.790762803871623
+  - 0.0
+  initial_pose:
+  - 57.702425985089306
+  - 13.658813891087933
+  - 0.0
+  orientation: 23.283952357014442
+  stage_prefix: character_1
+  velocity: 0.485046940520541
+agent_2:
+  character_name: original_male_adult_construction_05
+  controller_stats: false
+  goal_pose:
+  - 43.415082971610374
+  - 57.71174863603334
+  - 0.0
+  initial_pose:
+  - 8.536585954838234
+  - 38.01824434682016
+  - 0.0
+  orientation: 74.53801759090175
+  stage_prefix: character_2
+  velocity: 0.6217887538382278

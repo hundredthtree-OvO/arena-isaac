@@ -1,0 +1,28 @@
+agent_0:
+  stage_prefix: social_ped_0
+  character_name: original_female_adult_business_02
+  initial_pose:
+  - 0.45
+  - 0.72
+  - 0.0
+  goal_pose:
+  - 2.35
+  - 0.72
+  - 0.0
+  orientation: 0.0
+  controller_stats: false
+  velocity: 0.42
+agent_1:
+  stage_prefix: social_ped_1
+  character_name: original_male_adult_construction_03
+  initial_pose:
+  - 2.25
+  - 0.12
+  - 0.0
+  goal_pose:
+  - 0.55
+  - 0.12
+  - 0.0
+  orientation: 3.141592653589793
+  controller_stats: false
+  velocity: 0.38
