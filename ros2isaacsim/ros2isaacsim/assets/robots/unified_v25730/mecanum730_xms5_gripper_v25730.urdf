@@ -1,0 +1,2267 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="mecanum730_xms5_gripper" file_path="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/urdf/MyRot/Collected_0730Rot_v1.0/0730Rot_v1.0.usd">
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0" />
+  </material>
+  <material name="blue">
+    <color rgba="0.0 0.0 0.8 1.0" />
+  </material>
+  <material name="green">
+    <color rgba="0.0 0.8 0.0 1.0" />
+  </material>
+  <material name="grey">
+    <color rgba="0.2 0.2 0.2 1.0" />
+  </material>
+  <material name="orange">
+    <color rgba="1.0 0.423529411765 0.0392156862745 1.0" />
+  </material>
+  <material name="brown">
+    <color rgba="0.870588235294 0.811764705882 0.764705882353 1.0" />
+  </material>
+  <material name="red">
+    <color rgba="0.8 0.0 0.0 1.0" />
+  </material>
+  <material name="white">
+    <color rgba="1.0 1.0 1.0 1.0" />
+  </material>
+  <material name="Beige">
+    <color rgba="1.0 0.784 0.5765 1.0" />
+  </material>
+  <link name="base_footprint" />
+  <link name="base_link" prim="/base_link">
+    <inertial>
+      <origin xyz="0 0 0.05" rpy="0 0 0" />
+      <mass value="50" />
+      <inertia ixx="0.5" ixy="0" ixz="0" iyy="0.5" iyz="0" izz="0.8" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/base_link_visual.stl" />
+      </geometry>
+    </visual>
+    <collision name="arm_base_sphere_000">
+      <origin xyz="-0.178667 -0.143333 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_001">
+      <origin xyz="-0.178667 -0.143333 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_002">
+      <origin xyz="-0.178667 -0.143333 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_003">
+      <origin xyz="-0.178667 -0.143333 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_004">
+      <origin xyz="-0.178667 0.0 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_005">
+      <origin xyz="-0.178667 0.0 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_006">
+      <origin xyz="-0.178667 0.0 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_007">
+      <origin xyz="-0.178667 0.0 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_008">
+      <origin xyz="-0.178667 0.143333 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_009">
+      <origin xyz="-0.178667 0.143333 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_010">
+      <origin xyz="-0.178667 0.143333 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_011">
+      <origin xyz="-0.178667 0.143333 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_012">
+      <origin xyz="0.0 -0.143333 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_013">
+      <origin xyz="0.0 -0.143333 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_014">
+      <origin xyz="0.0 -0.143333 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_015">
+      <origin xyz="0.0 -0.143333 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_016">
+      <origin xyz="0.0 0.0 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_017">
+      <origin xyz="0.0 0.0 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_018">
+      <origin xyz="0.0 0.0 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_019">
+      <origin xyz="0.0 0.0 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_020">
+      <origin xyz="0.0 0.143333 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_021">
+      <origin xyz="0.0 0.143333 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_022">
+      <origin xyz="0.0 0.143333 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_023">
+      <origin xyz="0.0 0.143333 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_024">
+      <origin xyz="0.178667 -0.143333 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_025">
+      <origin xyz="0.178667 -0.143333 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_026">
+      <origin xyz="0.178667 -0.143333 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_027">
+      <origin xyz="0.178667 -0.143333 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_028">
+      <origin xyz="0.178667 0.0 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_029">
+      <origin xyz="0.178667 0.0 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_030">
+      <origin xyz="0.178667 0.0 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_031">
+      <origin xyz="0.178667 0.0 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_032">
+      <origin xyz="0.178667 0.143333 0.09" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_033">
+      <origin xyz="0.178667 0.143333 0.27" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_034">
+      <origin xyz="0.178667 0.143333 0.45" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_035">
+      <origin xyz="0.178667 0.143333 0.63" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.09" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_036">
+      <origin xyz="-0.213 -0.16125 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_037">
+      <origin xyz="-0.213 -0.16125 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_038">
+      <origin xyz="-0.213 -0.16125 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_039">
+      <origin xyz="-0.213 -0.16125 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_040">
+      <origin xyz="-0.213 -0.05375 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_041">
+      <origin xyz="-0.213 -0.05375 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_042">
+      <origin xyz="-0.213 -0.05375 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_043">
+      <origin xyz="-0.213 -0.05375 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_044">
+      <origin xyz="-0.213 0.05375 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_045">
+      <origin xyz="-0.213 0.05375 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_046">
+      <origin xyz="-0.213 0.05375 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_047">
+      <origin xyz="-0.213 0.05375 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_048">
+      <origin xyz="-0.213 0.16125 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_049">
+      <origin xyz="-0.213 0.16125 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_050">
+      <origin xyz="-0.213 0.16125 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_051">
+      <origin xyz="-0.213 0.16125 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_052">
+      <origin xyz="-0.103 -0.16125 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_053">
+      <origin xyz="-0.103 -0.16125 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_054">
+      <origin xyz="-0.103 -0.16125 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_055">
+      <origin xyz="-0.103 -0.16125 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_056">
+      <origin xyz="-0.103 -0.05375 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_057">
+      <origin xyz="-0.103 -0.05375 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_058">
+      <origin xyz="-0.103 -0.05375 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_059">
+      <origin xyz="-0.103 -0.05375 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_060">
+      <origin xyz="-0.103 0.05375 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_061">
+      <origin xyz="-0.103 0.05375 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_062">
+      <origin xyz="-0.103 0.05375 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_063">
+      <origin xyz="-0.103 0.05375 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_064">
+      <origin xyz="-0.103 0.16125 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_065">
+      <origin xyz="-0.103 0.16125 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_066">
+      <origin xyz="-0.103 0.16125 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_067">
+      <origin xyz="-0.103 0.16125 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.055" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_068">
+      <origin xyz="0.004667 0.08225 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_069">
+      <origin xyz="0.004667 0.08225 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_070">
+      <origin xyz="0.004667 0.08225 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_071">
+      <origin xyz="0.004667 0.08225 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_072">
+      <origin xyz="0.004667 0.17075 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_073">
+      <origin xyz="0.004667 0.17075 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_074">
+      <origin xyz="0.004667 0.17075 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_075">
+      <origin xyz="0.004667 0.17075 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_076">
+      <origin xyz="0.11 0.08225 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_077">
+      <origin xyz="0.11 0.08225 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_078">
+      <origin xyz="0.11 0.08225 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_079">
+      <origin xyz="0.11 0.08225 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_080">
+      <origin xyz="0.11 0.17075 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_081">
+      <origin xyz="0.11 0.17075 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_082">
+      <origin xyz="0.11 0.17075 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_083">
+      <origin xyz="0.11 0.17075 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_084">
+      <origin xyz="0.215333 0.08225 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_085">
+      <origin xyz="0.215333 0.08225 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_086">
+      <origin xyz="0.215333 0.08225 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_087">
+      <origin xyz="0.215333 0.08225 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_088">
+      <origin xyz="0.215333 0.17075 0.765" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_089">
+      <origin xyz="0.215333 0.17075 0.855" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_090">
+      <origin xyz="0.215333 0.17075 0.945" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+    <collision name="arm_base_sphere_091">
+      <origin xyz="0.215333 0.17075 1.035" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.052667" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="base_link_joint" type="fixed">
+    <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+    <parent link="base_footprint" />
+    <child link="base_link" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <link name="wheel_fl_link">
+    <inertial>
+      <origin xyz="1.19209335241e-09 -2.38418549595e-09 -3.21865090136e-09" rpy="0 0 2.02815925832e-07" />
+      <mass value="12" />
+      <inertia ixx="0.0179945928974" ixy="-1.1111971936e-08" ixz="8.20458197998e-08" iyy="0.0116347027099" iyz="-1.92956321647e-07" izz="0.0116351437482" />
+    </inertial>
+    <visual>
+      <origin xyz="1.19209335241e-09 -2.38418549595e-09 -3.21865090136e-09" rpy="0 0 2.02815925832e-07" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/wheel_left_core.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <link name="wheel_fr_link">
+    <inertial>
+      <origin xyz="-1.19209238531e-09 -2.3841859795e-09 -3.21865090136e-09" rpy="0 0 -3.14159245077" />
+      <mass value="12" />
+      <inertia ixx="0.0180079278628" ixy="-2.32145676917e-07" ixz="-7.71325895433e-08" iyy="0.011642249721" iyz="-4.46736965245e-08" izz="0.0116422698122" />
+    </inertial>
+    <visual>
+      <origin xyz="-1.19209238531e-09 -2.3841859795e-09 -3.21865090136e-09" rpy="0 0 -3.14159245077" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/wheel_right_core.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <link name="wheel_rl_link">
+    <inertial>
+      <origin xyz="1.19209238531e-09 2.3841859795e-09 -3.21865090136e-09" rpy="0 0 2.02815925832e-07" />
+      <mass value="12" />
+      <inertia ixx="0.0180079278628" ixy="-2.32145676917e-07" ixz="-7.71325895433e-08" iyy="0.011642249721" iyz="-4.46736965245e-08" izz="0.0116422698122" />
+    </inertial>
+    <visual>
+      <origin xyz="1.19209238531e-09 2.3841859795e-09 -3.21865090136e-09" rpy="0 0 2.02815925832e-07" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/wheel_right_core.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <link name="wheel_rr_link">
+    <inertial>
+      <origin xyz="-1.19209335241e-09 2.38418549595e-09 -3.21865090136e-09" rpy="0 0 -3.14159245077" />
+      <mass value="12" />
+      <inertia ixx="0.0179945928974" ixy="-1.1111971936e-08" ixz="8.20458197998e-08" iyy="0.0116347027099" iyz="-1.92956321647e-07" izz="0.0116351437482" />
+    </inertial>
+    <visual>
+      <origin xyz="-1.19209335241e-09 2.38418549595e-09 -3.21865090136e-09" rpy="0 0 -3.14159245077" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/wheel_left_core.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_joint" type="continuous">
+    <origin xyz="0.157499998808 0.172499999404 0.0780000016093" rpy="0 0 1.57079632679" />
+    <parent link="base_link" />
+    <child link="wheel_fl_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="1000" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_1_link">
+    <inertial>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_1_joint" type="continuous">
+    <origin xyz="-9.6803910668e-09 0.0536076439917 -0.0258160861731" rpy="0.785398163352 0.448798931081 1.57079657403" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_1_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_2_joint" type="continuous">
+    <origin xyz="1.32596412201e-08 -0.0595000037551 -3.21865093839e-09" rpy="-2.35619454875 -3.8938610003e-08 -1.57079614011" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_2_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_3_link">
+    <inertial>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_3_joint" type="continuous">
+    <origin xyz="-1.49318858624e-09 0.0132399931923 0.0580082093775" rpy="0.785398204827 -1.34639681424 1.57079644538" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_3_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_4_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_4_joint" type="continuous">
+    <origin xyz="-9.68039105142e-09 0.0536076439917 0.0258160797358" rpy="0.785398163352 -0.448798931081 1.5707964852" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_4_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_5_link">
+    <inertial>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_5_joint" type="continuous">
+    <origin xyz="-1.4931886071e-09 0.0132399931923 -0.0580082158148" rpy="0.785397820847 1.3463968278 1.57079615821" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_5_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_6_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_6_joint" type="continuous">
+    <origin xyz="8.71608642071e-09 -0.037097646445 0.0465189707875" rpy="-2.35619451067 -0.897597904715 -1.57079610033" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_6_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_7_joint" type="continuous">
+    <origin xyz="8.7160864375e-09 -0.037097646445 -0.0465189772248" rpy="-2.35619451067 0.897597904715 -1.57079614763" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_7_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <joint name="wheel_fr_joint" type="continuous">
+    <origin xyz="0.157499998808 -0.172499999404 0.0780000016093" rpy="0 0 1.57079615821" />
+    <parent link="base_link" />
+    <child link="wheel_fr_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="1000" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_1_link">
+    <inertial>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_1_joint" type="continuous">
+    <origin xyz="1.49318970817e-09 -0.0132399979606 0.0580082093775" rpy="-0.785397820847 -1.3463968278 -1.57079649538" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_1_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_2_joint" type="continuous">
+    <origin xyz="-1.32596410959e-08 0.0594999989867 -3.21865101174e-09" rpy="2.35619454875 3.89386099475e-08 1.57079651348" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_2_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_3_link">
+    <inertial>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_3_joint" type="continuous">
+    <origin xyz="1.49318976368e-09 -0.0132399979606 -0.0580082158148" rpy="-0.785398204827 1.34639681424 -1.5707962082" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_3_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_4_link">
+    <inertial>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_4_joint" type="continuous">
+    <origin xyz="-8.7160860499e-09 0.0370976416767 0.0465189707875" rpy="2.35619451067 -0.897597904715 1.57079650596" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_4_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_5_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_5_joint" type="continuous">
+    <origin xyz="9.68039275237e-09 -0.0536076487601 -0.0258160861731" rpy="-0.785398163352 0.448798931081 -1.57079616839" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_5_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_6_link">
+    <inertial>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_6_joint" type="continuous">
+    <origin xyz="9.68039275237e-09 -0.0536076487601 0.0258160797358" rpy="-0.785398163352 -0.448798931081 -1.57079607956" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_6_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_7_joint" type="continuous">
+    <origin xyz="-8.71608593887e-09 0.0370976416767 -0.0465189772248" rpy="2.35619451067 0.897597904715 1.57079655326" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_7_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <joint name="wheel_rl_joint" type="continuous">
+    <origin xyz="-0.157499998808 0.172499999404 0.0780000016093" rpy="0 0 1.57079632679" />
+    <parent link="base_link" />
+    <child link="wheel_rl_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="1000" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_1_link">
+    <inertial>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_1_joint" type="continuous">
+    <origin xyz="-1.49318952002e-09 0.0132399979606 0.0580082093775" rpy="-0.785397820847 -1.3463968278 1.57079615821" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_1_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_2_joint" type="continuous">
+    <origin xyz="1.32596402503e-08 -0.0594999989867 -3.21865101174e-09" rpy="2.35619454875 3.8938610003e-08 -1.57079614011" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_2_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_3_link">
+    <inertial>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_3_joint" type="continuous">
+    <origin xyz="-1.49318957553e-09 0.0132399979606 -0.0580082158148" rpy="-0.785398204827 1.34639681424 1.57079644538" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_3_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_4_link">
+    <inertial>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_4_joint" type="continuous">
+    <origin xyz="8.71608552271e-09 -0.0370976416767 0.0465189707875" rpy="2.35619451067 -0.897597904715 -1.57079614763" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_4_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_5_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_5_joint" type="continuous">
+    <origin xyz="-9.68039199056e-09 0.0536076487601 -0.0258160861731" rpy="-0.785398163352 0.448798931081 1.5707964852" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_5_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_6_link">
+    <inertial>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_6_joint" type="continuous">
+    <origin xyz="-9.68039199056e-09 0.0536076487601 0.0258160797358" rpy="-0.785398163352 -0.448798931081 1.57079657403" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_6_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_7_joint" type="continuous">
+    <origin xyz="8.71608541168e-09 -0.0370976416767 -0.0465189772248" rpy="2.35619451067 0.897597904715 -1.57079610033" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_7_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <joint name="wheel_rr_joint" type="continuous">
+    <origin xyz="-0.157499998808 -0.172499999404 0.0780000016093" rpy="0 0 1.57079615821" />
+    <parent link="base_link" />
+    <child link="wheel_rr_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="1000" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_1_link">
+    <inertial>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_1_joint" type="continuous">
+    <origin xyz="9.68039182861e-09 -0.0536076439917 -0.0258160861731" rpy="0.785398163352 0.448798931081 -1.57079607956" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_1_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_2_joint" type="continuous">
+    <origin xyz="-1.32596420656e-08 0.0595000037551 -3.21865093839e-09" rpy="-2.35619454875 -3.89386099475e-08 1.57079651348" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_2_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_3_link">
+    <inertial>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_3_joint" type="continuous">
+    <origin xyz="1.49318877439e-09 -0.0132399931923 0.0580082093775" rpy="0.785398204827 -1.34639681424 -1.5707962082" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_3_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_4_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_4_joint" type="continuous">
+    <origin xyz="9.68039181323e-09 -0.0536076439917 0.0258160797358" rpy="0.785398163352 -0.448798931081 -1.57079616839" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_4_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_5_link">
+    <inertial>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_5_joint" type="continuous">
+    <origin xyz="1.49318879525e-09 -0.0132399931923 -0.0580082158148" rpy="0.785397820847 1.3463968278 -1.57079649538" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_5_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_6_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_6_joint" type="continuous">
+    <origin xyz="-8.7160869479e-09 0.037097646445 0.0465189707875" rpy="-2.35619451067 -0.897597904715 1.57079655326" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_6_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/roller.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_7_joint" type="continuous">
+    <origin xyz="-8.71608696469e-09 0.037097646445 -0.0465189772248" rpy="-2.35619451067 0.897597904715 1.57079650596" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_7_link" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.0010000000475" friction="0" />
+  </joint>
+  <link name="XMS5-R800-W4G3B4C_base">
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/xms5/meshes/arm/XMS5-R800-W4G3B4C_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="3.167" />
+      <inertia ixx="0.03116799" ixy="-0.00000065" ixz="-0.00000427" iyy="0.03071271" iyz="-0.00223656" izz="0.00587740" />
+      <origin rpy="0 0 0" xyz="1.1e-05 -0.007992 0.23584200000000002" />
+    </inertial>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link1">
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/xms5/meshes/arm/XMS5-R800-W4G3B4C_link1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="3.167" />
+      <inertia ixx="0.03116799" ixy="-0.00000065" ixz="-0.00000427" iyy="0.03071271" iyz="-0.00223656" izz="0.00587740" />
+      <origin rpy="0 0 0" xyz="1.1e-05 -0.007992 0.23584200000000002" />
+    </inertial>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link2">
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/xms5/meshes/arm/XMS5-R800-W4G3B4C_link2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="4.291" />
+      <inertia ixx="0.14042515" ixy="0.00039009" ixz="0.01494819" iyy="0.14040198" iyz="-0.00255277" izz="0.01264775" />
+      <origin rpy="0 0 0" xyz="0.016666 -0.069301 0.184671" />
+    </inertial>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_001">
+      <origin xyz="-0.00574327586 0.00180808152 -0.0958750993" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0695845187" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_002">
+      <origin xyz="0.0574767366 -0.00749664428 -0.100504011" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0532317907" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_003">
+      <origin xyz="0.401650757 -0.00133751729 -0.0943331197" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0646361858" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_004">
+      <origin xyz="0.352474213 -0.0267467499 -0.103058599" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0490296111" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_005">
+      <origin xyz="0.0143388892 -0.0268791988 -0.0723613724" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0319973864" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_006">
+      <origin xyz="0.42870748 0.014276443 -0.052683413" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0131540112" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_007">
+      <origin xyz="0.296809345 -0.0267574564 -0.103182018" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0471731499" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_008">
+      <origin xyz="0.161233664 -0.020265935 -0.100262016" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0476343296" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_009">
+      <origin xyz="0.113334358 -0.0272403192 -0.102630235" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0405293964" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_010">
+      <origin xyz="0.248912424 -0.0181723703 -0.104913443" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0413502008" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_011">
+      <origin xyz="0.210979819 -0.0194733795 -0.105861768" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0425230637" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_012">
+      <origin xyz="0.198537782 -0.0367057063 -0.101441205" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0372851118" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_013">
+      <origin xyz="0.119447686 0.000470047322 -0.0998840779" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0393862948" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_014">
+      <origin xyz="0.0191621333 0.0463280976 -0.0638734177" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00806569681" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_015">
+      <origin xyz="0.245597482 -0.0441736132 -0.102232032" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0359907709" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_016">
+      <origin xyz="0.310037613 -0.0295766462 -0.0941922739" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0319968313" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link2_robotbuilder_sphere_017">
+      <origin xyz="0.334956706 0.0133982627 -0.12172921" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00578518864" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link3">
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/xms5/meshes/arm/XMS5-R800-W4G3B4C_link3.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="2.018" />
+      <inertia ixx="0.02103842" ixy="-0.00048390" ixz="0.00402665" iyy="0.02167667" iyz="-0.00170490" izz="0.00429357" />
+      <origin rpy="0 0 0" xyz="0.0249 0.009986 0.08373900000000001" />
+    </inertial>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_001">
+      <origin xyz="0.00323621347 -0.00472629722 -0.00474153413" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0581496619" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_002">
+      <origin xyz="-0.0329874568 0.00750417588 -0.00701248739" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.030402204" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_003">
+      <origin xyz="-0.0467627123 0.132505119 -0.00133939716" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0480005965" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_004">
+      <origin xyz="-0.044708062 0.0978574306 -0.00319940131" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0485701524" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_005">
+      <origin xyz="-0.0422319956 0.164521739 -0.0145193962" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0437006131" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_006">
+      <origin xyz="-0.0450958535 0.00357564655 0.0291465428" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0195986591" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_007">
+      <origin xyz="-0.0682646707 0.170712203 0.0082436502" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.038870845" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_008">
+      <origin xyz="-0.0256082918 0.175021783 0.0134210512" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0311804041" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_009">
+      <origin xyz="-0.0308891889 0.113666087 -0.0350770988" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00732473237" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_010">
+      <origin xyz="-0.0842969194 0.13544248 -0.00806853827" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00637511024" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_011">
+      <origin xyz="-0.0294390284 0.0440244563 0.00236499752" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.059460979" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_012">
+      <origin xyz="-0.0322364122 0.147393748 0.03420268" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00585567066" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_013">
+      <origin xyz="0.0382155962 0.0173045509 0.0331459902" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.017611526" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_014">
+      <origin xyz="-0.0279781111 -0.027798051 0.0309110153" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0240586158" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_015">
+      <origin xyz="0.0296014287 0.0191062558 -0.0212119613" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0147128999" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_016">
+      <origin xyz="0.0255377963 0.0386884101 0.0418577828" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00951261632" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_017">
+      <origin xyz="-0.0598177016 0.139897853 0.0357342996" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00502640149" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_018">
+      <origin xyz="0.0137486607 0.0458340421 0.0454040989" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00941754971" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_019">
+      <origin xyz="0.0307003334 -0.036537651 0.0494330861" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00536986114" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_020">
+      <origin xyz="0.0450656191 0.00103865005 0.0463451073" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00799521804" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_021">
+      <origin xyz="-0.00167580741 -0.0490705036 0.0380462185" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00676695723" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_022">
+      <origin xyz="0.0110053802 0.0190707035 -0.0420837812" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00566742104" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_023">
+      <origin xyz="0.0437697954 -0.0187763702 0.0448666699" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0128085436" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_024">
+      <origin xyz="-0.0562325977 0.196165413 0.0360022895" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00818185229" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_025">
+      <origin xyz="-0.0469026752 -0.0140362969 0.0324971862" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00873367488" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_026">
+      <origin xyz="-0.0470952466 0.00249795453 0.0420522876" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00971103739" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_027">
+      <origin xyz="-0.0146149425 -0.0473106876 0.0433081351" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00518059963" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_028">
+      <origin xyz="-0.0100193722 0.195465177 -0.00718222512" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00440524425" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_029">
+      <origin xyz="-0.0728116781 0.187583178 0.0187000744" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00504511734" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_030">
+      <origin xyz="0.0272645578 0.0292353388 0.0358158648" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00551173883" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_031">
+      <origin xyz="0.0323402919 -0.0343825445 0.0402432382" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00796184968" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_032">
+      <origin xyz="-0.01671963 -0.0425725617 0.048003938" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00731495069" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_033">
+      <origin xyz="0.0317607336 0.0353437588 0.0288499203" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0103531908" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_034">
+      <origin xyz="0.0102503663 -0.0465396978 0.0455883332" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0100729112" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link3_robotbuilder_sphere_035">
+      <origin xyz="-0.0743177831 0.195064962 -0.0271367896" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0099321343" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link4">
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/xms5/meshes/arm/XMS5-R800-W4G3B4C_link4.stl" scale=".001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="2.005" />
+      <inertia ixx="0.01325119" ixy="0.00000061" ixz="0.00000278" iyy="0.01255684" iyz="-0.00115731" izz="0.00274485" />
+      <origin rpy="0 0 0" xyz="6.6e-05 -0.008515 -0.068865" />
+    </inertial>
+    <collision name="XMS5-R800-W4G3B4C_link4_robotbuilder_sphere_001">
+      <origin xyz="-0.00119428558 -0.0347689092 -0.000190404156" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0475308783" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link4_robotbuilder_sphere_002">
+      <origin xyz="0.00148454262 0.0272315852 -0.00124826108" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0537003018" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link4_robotbuilder_sphere_003">
+      <origin xyz="0.000203228003 -0.000160196534 -0.0587876737" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0438578092" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link4_robotbuilder_sphere_004">
+      <origin xyz="0.000447641331 -0.000412554044 -0.164101839" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0513366424" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link4_robotbuilder_sphere_005">
+      <origin xyz="-0.000486550038 0.000348806119 -0.105199732" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0416522101" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link5">
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/xms5/meshes/arm/XMS5-R800-W4G3B4C_link5.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="1.507" />
+      <inertia ixx="0.00503262" ixy="-0.00000608" ixz="-0.00000129" iyy="0.00261442" iyz="-0.00033165" izz="0.00394480" />
+      <origin rpy="0 0 0" xyz="3e-06 0.029172999999999998 0.007019" />
+    </inertial>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_001">
+      <origin xyz="-0.0308876019 -0.0601738095 -0.0212469827" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00425691623" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_002">
+      <origin xyz="0.0313051119 -0.0192046929 0.0661351308" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00774080213" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_003">
+      <origin xyz="-0.0257470533 -0.0197269395 0.0444393717" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0123931291" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_004">
+      <origin xyz="0.0355323404 0.0643579215 -0.0165087096" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00549499365" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_005">
+      <origin xyz="-0.000104478131 0.0301300958 -0.000235446438" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0565232411" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_006">
+      <origin xyz="0.0263040792 0.054231327 -0.0327617303" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00244951714" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_007">
+      <origin xyz="0.00743334973 -0.0512445159 -0.0168958642" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0265928172" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_008">
+      <origin xyz="-0.036755193 0.00165737735 0.0645953268" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0123078115" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_009">
+      <origin xyz="0.028671639 -0.00217719143 0.0457700603" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0193876866" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_010">
+      <origin xyz="0.000491029001 0.0184967052 0.036802873" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0424758904" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_011">
+      <origin xyz="-0.0305526163 0.0223521776 0.061882332" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00946880225" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_012">
+      <origin xyz="0.000686446321 -0.042366799 0.00112040353" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0532063693" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_013">
+      <origin xyz="-0.0241779871 -0.0760666803 0.02628888" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00369330635" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_014">
+      <origin xyz="-0.00211726199 -0.0206128787 0.0301530994" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0468451306" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_015">
+      <origin xyz="0.0350849442 -0.0096731605 0.066455245" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00751333684" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_016">
+      <origin xyz="-0.0311586391 -0.0205491576 0.0663543716" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00967734493" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_017">
+      <origin xyz="0.0178248696 -0.0345271528 0.0664720163" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00454949075" />
+      </geometry>
+    </collision>
+    <collision name="XMS5-R800-W4G3B4C_link5_robotbuilder_sphere_018">
+      <origin xyz="0.0325942002 0.0145926708 0.0639514402" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0113311522" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="link6">
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/xms5/meshes/arm/XMS5-R800-W4G3B4C_link6.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="0.634" />
+      <inertia ixx="0.00099702" ixy="-0.00000138" ixz="0.00000090" iyy="0.00100253" iyz="0.00000158" izz="0.00044795" />
+      <origin rpy="0 0 0" xyz="7.3e-05 7.9e-05 -0.044853000000000004" />
+    </inertial>
+    <collision name="link6_robotbuilder_sphere_001">
+      <origin xyz="-0.0206119306 0.0137016494 -0.0172774456" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0264913607" />
+      </geometry>
+    </collision>
+    <collision name="link6_robotbuilder_sphere_002">
+      <origin xyz="-0.0258612055 -0.0196099449 -0.0179875419" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0231590383" />
+      </geometry>
+    </collision>
+    <collision name="link6_robotbuilder_sphere_003">
+      <origin xyz="0.040008191 -0.00731033925 -0.0306886211" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00512874732" />
+      </geometry>
+    </collision>
+    <collision name="link6_robotbuilder_sphere_004">
+      <origin xyz="0.00131282862 -0.0301587246 -0.0185062662" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0187325999" />
+      </geometry>
+    </collision>
+    <collision name="link6_robotbuilder_sphere_005">
+      <origin xyz="0.023760438 -0.019235367 -0.0165112037" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0201211367" />
+      </geometry>
+    </collision>
+    <collision name="link6_robotbuilder_sphere_006">
+      <origin xyz="0.00281929458 0.0318020135 -0.0211192071" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0209472217" />
+      </geometry>
+    </collision>
+    <collision name="link6_robotbuilder_sphere_007">
+      <origin xyz="0.0218051262 0.0116725517 -0.0164538026" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0251538549" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tool_link">
+    <inertial>
+      <mass value="0.5" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+      <origin rpy="0 0 0" xyz="0 0 0.03" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/tool_base_link.STL" />
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <material name="white" />
+    </visual>
+    <collision name="tool_link_robotbuilder_sphere_001">
+      <origin xyz="0.0500026681 -0.00687026139 0.00209593563" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0132839615" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_002">
+      <origin xyz="0.0515052676 -0.0296686664 -0.00237934361" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0151758203" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_003">
+      <origin xyz="0.0496515669 0.0228297655 -0.00110895187" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0185544845" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_004">
+      <origin xyz="0.00527585717 -0.000193985295 0.289724022" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00881817192" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_005">
+      <origin xyz="-0.00184342638 -8.60179061e-05 0.188628748" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0125533557" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_006">
+      <origin xyz="0.00179921824 -0.00301211257 0.0755283684" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0311971046" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_007">
+      <origin xyz="-0.0060926876 -0.00041410781 0.0233800914" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0432619452" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_008">
+      <origin xyz="-0.00794044137 -0.00149735773 0.132383227" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0246210843" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_009">
+      <origin xyz="0.0103958184 -0.00277883536 0.147607923" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0221520197" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_010">
+      <origin xyz="-0.00104005425 -0.00132775027 0.370944023" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0119995419" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_011">
+      <origin xyz="0.00223106286 -0.0136727104 0.435530901" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00312768015" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_012">
+      <origin xyz="-0.000843624293 0.000228545061 0.398128897" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0212738216" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_013">
+      <origin xyz="-0.000210110942 0.0121936481 0.436791867" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00343708633" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_014">
+      <origin xyz="0.00445867097 0.00032000689 0.341217786" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00797549076" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_015">
+      <origin xyz="-0.00128904684 0.00310258265 0.317489177" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0110090403" />
+      </geometry>
+    </collision>
+    <collision name="tool_link_robotbuilder_sphere_016">
+      <origin xyz="-0.0011745654 -0.00389813865 0.268081188" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00906517077" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="gripper_link1">
+    <inertial>
+      <origin xyz="-0.000987023087834993 -0.0202765803817861 -0.000515654181221868" rpy="0 0 0" />
+      <mass value="0.0111674785585402" />
+      <inertia ixx="3.59413887395954E-06" ixy="7.30795147948182E-07" ixz="-9.29169888745042E-08" iyy="9.6873098954976E-07" iyz="1.39232553191891E-07" izz="3.87360206766314E-06" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/gripper_link1.STL" />
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <material name="white" />
+    </visual>
+    <collision name="gripper_link1_robotbuilder_sphere_001">
+      <origin xyz="0.00059161376 -0.0376038514 -0.00533501338" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00568155802" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_002">
+      <origin xyz="-5.65826049e-05 -0.0344701447 0.00644734269" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00579667281" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_003">
+      <origin xyz="-0.0161393564 0.00755540747 -0.00469044549" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.001" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_004">
+      <origin xyz="-0.000864678645 0.00159686385 -8.85029949e-05" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00735667053" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_005">
+      <origin xyz="-0.0270505324 0.008869607 -0.00344198942" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00143170468" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_006">
+      <origin xyz="0.00323875877 -0.0264003854 -0.00551037258" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00600178586" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_007">
+      <origin xyz="0.00378077128 -0.0205301009 0.00456331018" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00609755144" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_008">
+      <origin xyz="0.00324393064 -0.0129562132 -0.00421711709" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00736982469" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_009">
+      <origin xyz="0.00280056591 -0.0105206762 0.0065690591" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00559601886" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_010">
+      <origin xyz="-0.000103937229 -0.0471875332 0.00486318534" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00157368287" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link1_robotbuilder_sphere_011">
+      <origin xyz="0.000338698679 -0.0503995456 -0.00578856654" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0016270921" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="gripper_link2">
+    <inertial>
+      <origin xyz="-0.00325807421421745 -0.0225105854582519 0.000515651849944308" rpy="0 0 0" />
+      <mass value="0.0111675254646053" />
+      <inertia ixx="3.33685517783338E-06" ixy="-1.06924214339669E-06" ixz="-1.11681304052473E-07" iyy="1.22600241993798E-06" iyz="-1.24685551421068E-07" izz="3.87358794233445E-06" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="/home/stardust/resources/mcp_service/curobo_v3/urdf/mecanum/stl/0730Rot_v1.0/gripper_link2.STL" />
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <material name="white" />
+    </visual>
+    <collision name="gripper_link2_robotbuilder_sphere_001">
+      <origin xyz="0.0282261092 0.00442430237 0.00423191721" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00292748426" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_002">
+      <origin xyz="-0.00743582798 -0.022758048 -0.00600753166" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0067377463" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_003">
+      <origin xyz="-0.007906124 -0.02724915 0.00586851733" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00644195452" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_004">
+      <origin xyz="-0.0052778665 -0.0102176927 -0.00623010751" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00553713832" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_005">
+      <origin xyz="-0.00693011424 -0.0144551983 0.00414826721" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00740398327" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_006">
+      <origin xyz="0.0160260629 0.000891023374 0.00431585638" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00307717707" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_007">
+      <origin xyz="0.000110660381 -0.000855238992 0.000532908191" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00724095952" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_008">
+      <origin xyz="-0.00647916319 -0.0408151112 0.00460365321" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.0040616837" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_009">
+      <origin xyz="-0.00788011122 -0.0379099473 -0.00586939044" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00674082799" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_010">
+      <origin xyz="-0.00888932869 -0.0497925952 -0.00459685503" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00122280734" />
+      </geometry>
+    </collision>
+    <collision name="gripper_link2_robotbuilder_sphere_011">
+      <origin xyz="-0.00944914669 -0.0517180711 0.00586128049" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="0.00245952768" />
+      </geometry>
+    </collision>
+  </link>
+  <link name="tool_tip_link">
+    <visual>
+      <geometry>
+        <sphere radius="0.001" />
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 0.5" />
+      </material>
+    </visual>
+  </link>
+  <joint name="joint1" type="revolute">
+    <parent link="XMS5-R800-W4G3B4C_base" />
+    <child link="XMS5-R800-W4G3B4C_link1" />
+    <limit effort="113" lower="-1.57" upper="1.57" velocity="3.141592653589793" />
+    <axis xyz="0 0 1" />
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.328" />
+  </joint>
+  <joint name="joint2" type="revolute">
+    <parent link="XMS5-R800-W4G3B4C_link1" />
+    <child link="XMS5-R800-W4G3B4C_link2" />
+    <limit effort="113" lower="-2.7925" upper="2.618" velocity="3.141592653589793" />
+    <axis xyz="0 0 1" />
+    <origin rpy="-1.5708 -1.446441 0.0" xyz="0.0 0.0 0.0" />
+  </joint>
+  <joint name="joint3" type="revolute">
+    <parent link="XMS5-R800-W4G3B4C_link2" />
+    <child link="XMS5-R800-W4G3B4C_link3" />
+    <limit effort="70" lower="-2.9671" upper="2.4435" velocity="3.141592653589793" />
+    <axis xyz="0 0 1" />
+    <origin rpy="3.1415926 0 1.446441" xyz="0.403113 0.0 0.0" />
+  </joint>
+  <joint name="joint4" type="revolute">
+    <parent link="XMS5-R800-W4G3B4C_link3" />
+    <child link="XMS5-R800-W4G3B4C_link4" />
+    <limit effort="25" lower="-3.2" upper="3.2" velocity="3.141592653589793" />
+    <axis xyz="0 0 1" />
+    <origin rpy="-1.5708 0 0" xyz="-0.05 0.4 0.0" />
+  </joint>
+  <joint name="joint5" type="revolute">
+    <parent link="XMS5-R800-W4G3B4C_link4" />
+    <child link="XMS5-R800-W4G3B4C_link5" />
+    <limit effort="25" lower="-3.2" upper="3.2" velocity="3.141592653589793" />
+    <axis xyz="0 0 1" />
+    <origin rpy="1.5708 0 0" xyz="0.0 0.136 0.0" />
+  </joint>
+  <joint name="joint6" type="revolute">
+    <parent link="XMS5-R800-W4G3B4C_link5" />
+    <child link="link6" />
+    <limit effort="19" lower="-3.49" upper="3.49" velocity="3.141592653589793" />
+    <axis xyz="0 0 1" />
+    <origin rpy="-1.5708 0.0 0" xyz="0.0 0.1035 0.0" />
+  </joint>
+  <joint name="joint_tool_fixed" type="fixed">
+    <parent link="link6" />
+    <child link="tool_link" />
+    <origin xyz="0 0 0.03" rpy="0 0 0" />
+  </joint>
+  <joint name="gripper_joint1" type="revolute">
+    <origin xyz="0.00043822 0.023057 0.44495" rpy="-1.5708 0.069988 1.5708" />
+    <parent link="tool_link" />
+    <child link="gripper_link1" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.5236" upper="0.5236" effort="5" velocity="1" />
+    <dynamics damping="0.01" friction="0" />
+  </joint>
+  <joint name="gripper_joint2" type="revolute">
+    <origin xyz="-0.00056178 -0.021941 0.44256" rpy="-1.5708 0.069988 1.5708" />
+    <parent link="tool_link" />
+    <child link="gripper_link2" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.5236" upper="0.5236" effort="5" velocity="1" />
+    <dynamics damping="0.01" friction="0" />
+    <mimic joint="gripper_joint1" multiplier="-1" offset="0" />
+  </joint>
+  <joint name="joint_tip" type="fixed">
+    <parent link="tool_link" />
+    <child link="tool_tip_link" />
+    <origin xyz="0 0 0.499" rpy="0 0 0" />
+  </joint>
+  <transmission name="tran1">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="joint1">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor1">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <transmission name="tran2">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="joint2">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor2">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <transmission name="tran3">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="joint3">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor3">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <transmission name="tran4">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="joint4">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor4">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <transmission name="tran5">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="joint5">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor5">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <transmission name="tran6">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="joint6">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="motor6">
+      <hardwareInterface>EffortJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <joint name="root_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="XMS5-R800-W4G3B4C_base" />
+    <origin xyz="0.17 -0.062 0.52" rpy="0 0 0" />
+  </joint>
+  <link name="base_scan_01">
+    </link>
+  <joint name="base_footprint2base_scan_01" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_scan_01" />
+    <origin xyz="0.2 0.13 0.208" rpy="3.14 0 0" />
+  </joint>
+  <link name="base_scan_02">
+    </link>
+  <joint name="base_footprint2base_scan_02" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_scan_02" />
+    <origin xyz="-0.2 -0.13 0.208" rpy="3.14 0 3.14" />
+  </joint>
+  <link name="base_imu_link">
+    </link>
+  <joint name="base_footprint2base_imu" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_imu_link" />
+    <origin xyz="0.0 0.0 0.346" rpy="3.14 0.0 0.0" />
+  </joint>
+</robot>
