@@ -11,6 +11,8 @@ bridge:
   active_fps: 30
   mem_log_sec: 30
   enable_people_stack: false
+  enable_character_services: false
+  people_extension_mode: minimal
   enable_material_stack: false
   enable_navmesh: false
 scene:
@@ -322,6 +324,8 @@ phases:
     overlap_policy: escape
     guard_backend: voxel
     enable_people_stack: true
+    enable_character_services: true
+    people_extension_mode: replicator_agent_core
     enable_navmesh: false
   rtx_scan:
     proxy_source: 'off'
@@ -332,5 +336,7 @@ phases:
     overlap_policy: escape
     guard_backend: voxel
     enable_people_stack: true
+    enable_character_services: true
+    people_extension_mode: replicator_agent_core
     enable_navmesh: false
     lidar_backend: rtx

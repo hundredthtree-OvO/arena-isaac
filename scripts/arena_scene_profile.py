@@ -213,6 +213,18 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     enable_people_stack = phase_cfg.get("enable_people_stack", bridge.get("enable_people_stack", False))
     enable_material_stack = phase_cfg.get("enable_material_stack", bridge.get("enable_material_stack", False))
     enable_navmesh = phase_cfg.get("enable_navmesh", bridge.get("enable_navmesh", False))
+    enable_character_services = phase_cfg.get(
+        "enable_character_services",
+        bridge.get("enable_character_services", False),
+    )
+    people_extension_mode = str(
+        phase_cfg.get(
+            "people_extension_mode",
+            bridge.get("people_extension_mode", "minimal"),
+        )
+    )
+    env["ARENA_ISAAC_ENABLE_CHARACTER_SERVICES"] = as_bool(enable_character_services)
+    env["ARENA_ISAAC_PEOPLE_EXTENSION_MODE"] = people_extension_mode
 
     args = [
         "ros2", "launch", "ros2isaacsim", "run_isaacsim.launch.py",

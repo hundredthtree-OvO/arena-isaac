@@ -1,4 +1,4 @@
-"""Editable-proxy kinematic collision guard for Isaac Sim navigation scenes.
+"""Legacy compatibility wrapper for collision guard backends.
 
 V13.3 changes:
 - Adds strict/escape overlap handling when the robot starts inside a proxy.
@@ -10,6 +10,10 @@ V13.3 changes:
 V14 changes:
 - Supports ``ARENA_ISAAC_COLLISION_GUARD_BACKEND=2d``. In that mode this class delegates
   to ``Semantic2DCollisionGuard`` and ignores 3D proxy cubes at runtime.
+
+V20 note:
+- Dynamic actor blocking for the main runtime path now lives in ``voxel_guard.py``.
+- This module remains as a compatibility wrapper for non-voxel backends.
 """
 from __future__ import annotations
 
@@ -20,6 +24,20 @@ from dataclasses import dataclass
 from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
+try:
+    from isaac_utils.dynamic_actor_guard import (
+        RobotGuardState,
+        footprint_extents,
+        predict_robot_pose,
+        robot_pedestrian_scores,
+    )
+except Exception:  # pragma: no cover
+    from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
+        RobotGuardState,
+        footprint_extents,
+        predict_robot_pose,
+        robot_pedestrian_scores,
+    )
 from isaacsim.core.utils.stage import get_current_stage
 from pxr import Gf, Usd, UsdGeom
 
@@ -245,6 +263,7 @@ def _obb_penetration_2d(
 
 
 class KinematicCollisionGuard:
+    """Compatibility wrapper that dispatches to voxel/2d/proxy backends."""
     def __init__(self, *, robot_name: str, logger=None, config: Optional[GuardConfig] = None):
         self.robot_name = robot_name
         self.logger = logger
@@ -365,12 +384,110 @@ class KinematicCollisionGuard:
         self._maybe_log_stats()
         return best_score, best_path, dt_ms
 
+    def _robot_guard_state(self, *, pos_xyz, heading: float, vx: float, vy: float, wz: float, dt: float) -> RobotGuardState:
+        forward, rear, left, right = footprint_extents(
+            length=self.config.length,
+            width=self.config.width,
+            margin=self.config.margin,
+            footprint_forward=self.config.footprint_forward,
+            footprint_rear=self.config.footprint_rear,
+            footprint_left=self.config.footprint_left,
+            footprint_right=self.config.footprint_right,
+        )
+        next_pos_xy, next_heading = predict_robot_pose(
+            pos_xy=(float(pos_xyz[0]), float(pos_xyz[1])),
+            heading=heading,
+            vx=vx,
+            vy=vy,
+            wz=wz,
+            dt=dt,
+        )
+        return RobotGuardState(
+            name=self.robot_name,
+            pos_xy=(float(pos_xyz[0]), float(pos_xyz[1])),
+            heading=float(heading),
+            next_pos_xy=next_pos_xy,
+            next_heading=float(next_heading),
+            forward=forward,
+            rear=rear,
+            left=left,
+            right=right,
+        )
+
+    def _dynamic_pedestrian_states(self, dt: float):
+        try:
+            from pedestrian.simulator.logic.people_manager import PeopleManager
+        except Exception:
+            return []
+        people = getattr(PeopleManager, "_people", {}) or {}
+        states = []
+        seen = set()
+        for person in people.values():
+            if person is None:
+                continue
+            marker = id(person)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            getter = getattr(person, "get_dynamic_guard_state", None)
+            if not callable(getter):
+                continue
+            try:
+                state = getter(dt)
+            except Exception:
+                continue
+            if state is not None:
+                states.append(state)
+        return states
+
+    def _dynamic_current_collision_score(self, *, pos_xyz, heading: float) -> Tuple[float, Optional[str]]:
+        robot = self._robot_guard_state(pos_xyz=pos_xyz, heading=heading, vx=0.0, vy=0.0, wz=0.0, dt=0.0)
+        best_score = 0.0
+        best_name = None
+        for ped in self._dynamic_pedestrian_states(0.0):
+            current_score, _next_score = robot_pedestrian_scores(robot, ped)
+            if current_score > best_score:
+                best_score = current_score
+                best_name = f"pedestrian:{ped.name}"
+        return best_score, best_name
+
+    def _dynamic_candidate_scores(
+        self,
+        *,
+        pos_xyz,
+        heading: float,
+        vx: float,
+        vy: float,
+        wz: float,
+        dt: float,
+    ) -> Tuple[float, float, Optional[str]]:
+        if dt <= 0.0:
+            current_score, current_name = self._dynamic_current_collision_score(pos_xyz=pos_xyz, heading=heading)
+            return current_score, current_score, current_name
+        robot = self._robot_guard_state(pos_xyz=pos_xyz, heading=heading, vx=vx, vy=vy, wz=wz, dt=dt)
+        best_current = 0.0
+        best_next = 0.0
+        best_name = None
+        for ped in self._dynamic_pedestrian_states(dt):
+            current_score, next_score = robot_pedestrian_scores(robot, ped)
+            score = max(current_score, next_score)
+            if score <= max(best_current, best_next):
+                continue
+            best_current = current_score
+            best_next = next_score
+            best_name = f"pedestrian:{ped.name}"
+        return best_current, best_next, best_name
+
     def pose_collides(self, pos_xyz, heading: float, *, log_block: bool = True) -> Tuple[bool, Optional[str], float]:
         if self._voxel is not None:
             return self._voxel.pose_collides(pos_xyz, heading, log_block=log_block)
         if self._semantic2d is not None:
             return self._semantic2d.pose_collides(pos_xyz, heading, log_block=log_block)
         score, path, dt_ms = self._collision_score(pos_xyz, heading)
+        dyn_score, dyn_name = self._dynamic_current_collision_score(pos_xyz=pos_xyz, heading=heading)
+        if dyn_score > score:
+            score = dyn_score
+            path = dyn_name
         if score > 0.0:
             if log_block:
                 self._maybe_log_block(path or "unknown", dt_ms, score=score)
@@ -406,9 +523,23 @@ class KinematicCollisionGuard:
 
     def _candidate_is_allowed_from_overlap(self, *, pos_xyz, heading: float, vx: float, vy: float, wz: float, dt: float) -> Tuple[bool, str, float, float, Optional[str]]:
         current_score, current_path, _ = self._collision_score(pos_xyz, heading)
+        dyn_current_score, dyn_next_score, dyn_path = self._dynamic_candidate_scores(
+            pos_xyz=pos_xyz,
+            heading=heading,
+            vx=vx,
+            vy=vy,
+            wz=wz,
+            dt=dt,
+        )
+        if dyn_current_score > current_score:
+            current_score = dyn_current_score
+            current_path = dyn_path
         if current_score <= 0.0:
             next_pos, next_heading = self._predict(pos_xyz=pos_xyz, heading=heading, vx=vx, vy=vy, wz=wz, dt=dt)
             next_score, next_path, next_ms = self._collision_score(next_pos, next_heading)
+            if dyn_next_score > next_score:
+                next_score = dyn_next_score
+                next_path = dyn_path
             if next_score <= 0.0:
                 return True, "free", current_score, next_score, next_path
             self._maybe_log_block(next_path or "unknown", next_ms, score=next_score)
@@ -416,6 +547,9 @@ class KinematicCollisionGuard:
 
         next_pos, next_heading = self._predict(pos_xyz=pos_xyz, heading=heading, vx=vx, vy=vy, wz=wz, dt=dt)
         next_score, next_path, _ = self._collision_score(next_pos, next_heading)
+        if dyn_next_score > next_score:
+            next_score = dyn_next_score
+            next_path = dyn_path
         path = next_path or current_path
         policy = self.config.overlap_policy
         if policy == "allow":

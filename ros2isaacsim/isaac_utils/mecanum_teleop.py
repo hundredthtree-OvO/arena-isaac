@@ -47,6 +47,18 @@ try:
 except Exception:  # pragma: no cover - imported inside Isaac Sim normally
     KinematicCollisionGuard = None  # type: ignore
     collision_guard_config_from_env = None  # type: ignore
+try:
+    from isaac_utils.dynamic_actor_guard import (
+        RobotGuardState,
+        footprint_extents,
+        predict_robot_pose,
+    )
+except Exception:  # pragma: no cover
+    from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
+        RobotGuardState,
+        footprint_extents,
+        predict_robot_pose,
+    )
 from isaacsim.core.utils.stage import get_current_stage
 from pxr import Gf, Usd, UsdGeom
 try:
@@ -916,6 +928,62 @@ class MecanumRobot:
         except Exception as exc:
             self._collision_guard = None
             self._log_warn(f"[{self.name}] failed to initialize collision guard: {exc}")
+
+    def _guard_extents(self):
+        if self._collision_guard is not None:
+            cfg = self._collision_guard.config
+            return footprint_extents(
+                length=cfg.length,
+                width=cfg.width,
+                margin=cfg.margin,
+                footprint_forward=cfg.footprint_forward,
+                footprint_rear=cfg.footprint_rear,
+                footprint_left=cfg.footprint_left,
+                footprint_right=cfg.footprint_right,
+            )
+        return footprint_extents(
+            length=2.0 * float(self.config.half_length),
+            width=2.0 * float(self.config.half_width),
+            margin=0.05,
+        )
+
+    def _current_guard_pose(self):
+        try:
+            pos, quat = _get_usd_xform_pose(self.prim_path)
+            return np.array(pos, dtype=np.float32), float(_quat_wxyz_to_yaw(quat))
+        except Exception:
+            if self._kinematic_pos is None:
+                return None, None
+            return np.array(self._kinematic_pos, dtype=np.float32), float(self._heading)
+
+    def get_dynamic_guard_state(self, dt: float) -> Optional[RobotGuardState]:
+        pos, heading = self._current_guard_pose()
+        if pos is None or heading is None:
+            return None
+        if self._settling_state != "ready":
+            vx = vy = wz = 0.0
+        else:
+            vx, vy, wz = self._current_cmd()
+        next_pos_xy, next_heading = predict_robot_pose(
+            pos_xy=(float(pos[0]), float(pos[1])),
+            heading=float(heading),
+            vx=float(vx),
+            vy=float(vy),
+            wz=float(wz),
+            dt=float(max(0.0, dt)),
+        )
+        forward, rear, left, right = self._guard_extents()
+        return RobotGuardState(
+            name=self.name,
+            pos_xy=(float(pos[0]), float(pos[1])),
+            heading=float(heading),
+            next_pos_xy=next_pos_xy,
+            next_heading=float(next_heading),
+            forward=forward,
+            rear=rear,
+            left=left,
+            right=right,
+        )
 
     def _current_cmd(self):
         with self._lock:

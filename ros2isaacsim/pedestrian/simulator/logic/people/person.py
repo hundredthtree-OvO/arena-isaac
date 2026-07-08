@@ -1,5 +1,6 @@
 # Low level APIs
 import os
+import time
 
 import carb
 import numpy as np
@@ -8,6 +9,20 @@ import omni.anim.graph.core as ag
 # High level Isaac sim APIs
 import omni.client
 from isaacsim.core.utils import prims
+try:
+    from isaac_utils.dynamic_actor_guard import (
+        PedestrianGuardState,
+        movement_allowed,
+        pedestrian_robot_scores,
+        predict_pedestrian_step,
+    )
+except Exception:  # pragma: no cover
+    from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
+        PedestrianGuardState,
+        movement_allowed,
+        pedestrian_robot_scores,
+        predict_pedestrian_step,
+    )
 from isaac_utils.utils.assets import get_assets_root_path_safe
 from isaac_utils.animgraph_people import normalize_stage_name
 
@@ -142,6 +157,8 @@ class Person:
 
         self._collision_proxy_path = None
         self._spawn_collision_proxy()
+        self._guard_escape_epsilon = 1e-4
+        self._last_guard_block_log = 0.0
 
         # Add a callback to start/stop of the simulation once the play/stop button is hit
         self._world.add_timeline_callback(
@@ -242,6 +259,11 @@ class Person:
             index_point = self._current_point_index
             active_goal = self._target_position[index_point]
 
+        if not self._robot_guard_allows_motion(dt, active_goal):
+            self.character_graph.set_variable("Walk", 0.0)
+            self.character_graph.set_variable("Action", "Idle")
+            return
+
         self.character_graph.set_variable("Action", "Walk")
         self.character_graph.set_variable(
             "PathPoints",
@@ -318,6 +340,80 @@ class Person:
         # Signal the controller the updated state
         if self._controller:
             self._controller.update_state(self._state)
+
+    def _preview_active_goal(self):
+        if self._num_path_points <= 0:
+            return None
+        if self._current_point_index < 0 or self._current_point_index >= self._num_path_points:
+            return None
+        index_point = int(self._current_point_index)
+        active_goal = np.array(self._target_position[index_point], dtype=float)
+        if np.linalg.norm(active_goal - self._state.position) >= 0.5:
+            return active_goal
+        index_point += int(self._path_direction)
+        if index_point >= self._num_path_points:
+            if self._loop_path and self._num_path_points > 1:
+                index_point = self._num_path_points - 2
+            else:
+                return None
+        elif index_point < 0:
+            if self._loop_path and self._num_path_points > 1:
+                index_point = 1
+            else:
+                return None
+        if index_point < 0 or index_point >= self._num_path_points:
+            return None
+        return np.array(self._target_position[index_point], dtype=float)
+
+    def get_dynamic_guard_state(self, dt: float, active_goal=None):
+        pos_xy = (float(self._state.position[0]), float(self._state.position[1]))
+        goal = active_goal
+        if goal is None:
+            goal = self._preview_active_goal()
+        goal_xy = None if goal is None else (float(goal[0]), float(goal[1]))
+        next_pos_xy = predict_pedestrian_step(
+            pos_xy=pos_xy,
+            goal_xy=goal_xy,
+            speed=float(self._target_speed),
+            dt=float(max(0.0, dt)),
+        )
+        return PedestrianGuardState(
+            name=str(self._stage_prefix or self._requested_stage_name),
+            pos_xy=pos_xy,
+            next_pos_xy=next_pos_xy,
+            radius=float(Person.collision_proxy_radius),
+        )
+
+    def _robot_guard_allows_motion(self, dt: float, active_goal) -> bool:
+        if dt <= 0.0 or self._target_speed <= 0.0:
+            return True
+        try:
+            from isaac_utils.mecanum_teleop import mecanum_teleop_manager
+        except Exception:
+            return True
+        ped_state = self.get_dynamic_guard_state(dt, active_goal=active_goal)
+        blocked_by = None
+        for robot in list(getattr(mecanum_teleop_manager, "robots", {}).values()):
+            getter = getattr(robot, "get_dynamic_guard_state", None)
+            if not callable(getter):
+                continue
+            robot_state = getter(dt)
+            if robot_state is None:
+                continue
+            current_score, next_score = pedestrian_robot_scores(ped_state, robot_state)
+            if movement_allowed(current_score, next_score, escape_epsilon=self._guard_escape_epsilon):
+                continue
+            blocked_by = robot_state.name
+            break
+        if blocked_by is None:
+            return True
+        now = time.monotonic()
+        if float(now) - float(self._last_guard_block_log) >= 0.5:
+            self._last_guard_block_log = float(now)
+            carb.log_info(
+                f"[dynamic_actor_guard] pedestrian {self._stage_prefix} paused for robot {blocked_by}"
+            )
+        return False
 
     def spawn_agent(self, usd_file, stage_name, init_pos, init_yaw):
 
