@@ -20,6 +20,8 @@ try:
 except Exception:  # pragma: no cover
     from omni.isaac.core.utils.extensions import enable_extension, get_extension_path_from_name  # type: ignore
 
+from isaac_utils.rtx_sensor_settings import ensure_rtx_sensor_coord_frame
+
 
 def _log(logger, level: str, text: str):
     if logger is None:
@@ -513,6 +515,10 @@ def create_dual_lidar(
     """Attach front/rear 2D RTX lidar sensors to a mobile robot root."""
     publish_points = _env_bool("ARENA_ISAAC_LIDAR_PUBLISH_POINTS", False)
     range_offset_m = _env_float("ARENA_ISAAC_LIDAR_RANGE_OFFSET_M", 0.0)
+    ensure_rtx_sensor_coord_frame(
+        logger=logger,
+        reason=f"create_dual_lidar robot={robot_name}",
+    )
     enable_extension("isaacsim.ros2.bridge")
     enable_extension("isaacsim.core.nodes")
     try:

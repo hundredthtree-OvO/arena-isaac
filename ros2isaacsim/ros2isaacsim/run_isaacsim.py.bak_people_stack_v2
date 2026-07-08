@@ -31,8 +31,6 @@ def _env_bool(name: str, default: bool = False) -> bool:
 ENABLE_PEOPLE_STACK = _env_bool('ARENA_ISAAC_ENABLE_PEOPLE_STACK', False)
 ENABLE_MATERIAL_STACK = _env_bool('ARENA_ISAAC_ENABLE_MATERIAL_STACK', False)
 ENABLE_NAVMESH = _env_bool('ARENA_ISAAC_ENABLE_NAVMESH', False)
-
-ENABLE_CHARACTER_SERVICES = _env_bool('ARENA_ISAAC_ENABLE_CHARACTER_SERVICES', False)
 ADD_GROUND_PLANE = _env_bool('ARENA_ISAAC_ADD_GROUND_PLANE', True)
 
 from isaac_utils.animgraph_people import ensure_animgraph_experience
@@ -63,7 +61,6 @@ import yaml
 from isaacsim.core.utils import extensions, stage
 from isaac_utils.utils.assets import get_assets_root_path_safe
 from isaac_utils.animgraph_people import enable_animgraph_people_extensions
-from isaac_utils.rtx_sensor_settings import ensure_rtx_sensor_coord_frame
 
 from isaacsim.core.utils.prims import set_prim_attribute_value
 from isaacsim.asset.importer.urdf import _urdf
@@ -105,63 +102,6 @@ _PEOPLE_EXTENSION_SETS = {
         "omni.anim.navigation.recast",
     ],
     # Previous behavior.  Use only when you intentionally need the full stack.
-    # Full stack except isaacsim.replicator.agent.*.
-    # If nav is normal but full_no_replicator is normal and full is broken,
-    # the culprit is almost certainly Replicator Agent.
-    "full_no_replicator": [
-        "omni.anim.timeline",
-        "omni.anim.graph.bundle",
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.graph.ui",
-        "omni.anim.retarget.bundle",
-        "omni.anim.retarget.core",
-        "omni.anim.retarget.ui",
-        "omni.kit.scripting",
-        "omni.graph.nodes",
-        "omni.anim.curve.core",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "omni.anim.people",
-    ],
-    # Add Replicator Agent on top of the nav/people set, without other full-stack UI/retarget extras.
-    "replicator_agent": [
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.people",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "isaacsim.replicator.agent.core",
-        "isaacsim.replicator.agent.ui",
-    ],
-    # Replicator Agent core only. This helps distinguish core vs UI.
-    "replicator_agent_core": [
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.people",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "isaacsim.replicator.agent.core",
-    ],
-    # Full stack except Replicator Agent and user-facing UI pieces.
-    "full_no_replicator_no_ui": [
-        "omni.anim.timeline",
-        "omni.anim.graph.bundle",
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.retarget.bundle",
-        "omni.anim.retarget.core",
-        "omni.kit.scripting",
-        "omni.graph.nodes",
-        "omni.anim.curve.core",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "omni.anim.people",
-    ],
     "full": [
         "omni.anim.timeline",
         "omni.anim.graph.bundle",
@@ -212,11 +152,6 @@ if ENABLE_MATERIAL_STACK:
 
 # Update once after optional extension changes.
 simulation_app.update()
-
-ensure_rtx_sensor_coord_frame(
-    logger=carb,
-    reason=f"bridge startup people_extension_mode={PEOPLE_EXTENSION_MODE}",
-)
 
 # -------------------------------------------------------------------------------------------------
 # These lines are needed to restart the USD stage and make sure that the people extension is loaded
@@ -280,17 +215,8 @@ if ENABLE_PEOPLE_STACK:
 
 from isaacsim_msgs.srv import ImportUsd, ImportYaml
 from isaacsim_msgs.srv import Pedestrian
-# PeopleManager also touches people/navigation settings; keep it out of the RTX
-# LiDAR debug path unless actual character services are explicitly enabled.
-if ENABLE_PEOPLE_STACK and ENABLE_CHARACTER_SERVICES:
-    try:
-        from pedestrian.simulator.logic.people_manager import PeopleManager
-    except Exception as exc:  # noqa: BLE001
-        try:
-            carb.log_warn(f"PeopleManager unavailable; character services disabled: {exc}")
-        except Exception:
-            print(f"PeopleManager unavailable; character services disabled: {exc}", flush=True)
-        PeopleManager = None
+if ENABLE_PEOPLE_STACK:
+    from pedestrian.simulator.logic.people_manager import PeopleManager
 else:
     PeopleManager = None
 

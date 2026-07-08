@@ -11,109 +11,22 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Iterable, Optional
-
-_PEOPLE_EXTENSION_SETS: dict[str, tuple[str, ...]] = {
-    "schema": (
-        "omni.anim.graph.schema",
-    ),
-    "minimal": (
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-    ),
-    "people": (
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.people",
-    ),
-    "nav": (
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.people",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-    ),
-    "full_no_replicator": (
-        "omni.anim.timeline",
-        "omni.anim.graph.bundle",
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.graph.ui",
-        "omni.anim.retarget.bundle",
-        "omni.anim.retarget.core",
-        "omni.anim.retarget.ui",
-        "omni.kit.scripting",
-        "omni.graph.nodes",
-        "omni.anim.curve.core",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "omni.anim.people",
-    ),
-    "replicator_agent": (
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.people",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "isaacsim.replicator.agent.core",
-        "isaacsim.replicator.agent.ui",
-    ),
-    "replicator_agent_core": (
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.people",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "isaacsim.replicator.agent.core",
-    ),
-    "full_no_replicator_no_ui": (
-        "omni.anim.timeline",
-        "omni.anim.graph.bundle",
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.retarget.bundle",
-        "omni.anim.retarget.core",
-        "omni.kit.scripting",
-        "omni.graph.nodes",
-        "omni.anim.curve.core",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "omni.anim.people",
-    ),
-    "full": (
-        "omni.anim.timeline",
-        "omni.anim.graph.bundle",
-        "omni.anim.graph.schema",
-        "omni.anim.graph.core",
-        "omni.anim.graph.ui",
-        "omni.anim.retarget.bundle",
-        "omni.anim.retarget.core",
-        "omni.anim.retarget.ui",
-        "omni.kit.scripting",
-        "omni.graph.nodes",
-        "omni.anim.curve.core",
-        "omni.anim.navigation.schema",
-        "omni.anim.navigation.core",
-        "omni.anim.navigation.recast",
-        "omni.anim.people",
-        "isaacsim.replicator.agent.core",
-        "isaacsim.replicator.agent.ui",
-    ),
-}
-
-
-def get_animgraph_people_extensions() -> tuple[str, ...]:
-    mode = os.environ.get("ARENA_ISAAC_PEOPLE_EXTENSION_MODE", "minimal").strip().lower()
-    if mode not in _PEOPLE_EXTENSION_SETS:
-        mode = "minimal"
-    return _PEOPLE_EXTENSION_SETS[mode]
-
-
-ANIMGRAPH_PEOPLE_EXTENSIONS: tuple[str, ...] = get_animgraph_people_extensions()
+'''
+ANIMGRAPH_PEOPLE_EXTENSIONS: tuple[str, ...] = (
+    "omni.anim.graph.schema",
+    "omni.anim.graph.core",
+    "omni.anim.graph.ui",
+    "omni.anim.navigation.schema",
+    "omni.anim.navigation.core",
+    "omni.anim.navigation.recast",
+    "omni.anim.people",
+    "isaacsim.replicator.agent.core",
+    "isaacsim.replicator.agent.ui",
+)
+'''
+ANIMGRAPH_PEOPLE_EXTENSIONS: tuple[str, ...] = (
+    "omni.anim.graph.schema",
+)
 
 DEFAULT_PEOPLE_ASSET_ROOT = (
     "https://omniverse-content-production.s3-us-west-2.amazonaws.com/"

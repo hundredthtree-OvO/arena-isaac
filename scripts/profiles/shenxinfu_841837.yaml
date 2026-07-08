@@ -183,9 +183,9 @@ motion:
   max_linear_speed: 0.8
   max_lateral_speed: 0.5
   max_angular_speed: 1.2
-  max_linear_accel: 0.12
-  max_lateral_accel: 0.12
-  max_angular_accel: 0.25
+  max_linear_accel: 0.5
+  max_lateral_accel: 0.5
+  max_angular_accel: 0.75
   max_linear_decel: 0.8
   max_lateral_decel: 0.8
   max_angular_decel: 1.2
@@ -331,6 +331,6 @@ phases:
     enable_guard: true
     overlap_policy: escape
     guard_backend: voxel
-    enable_people_stack: false
+    enable_people_stack: true
     enable_navmesh: false
     lidar_backend: rtx
