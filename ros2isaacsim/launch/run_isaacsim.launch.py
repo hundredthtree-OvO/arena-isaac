@@ -17,6 +17,8 @@ def generate_launch_description():
     active_fps = LaunchConfiguration("active_fps")
     mem_log_sec = LaunchConfiguration("mem_log_sec")
     enable_people_stack = LaunchConfiguration("enable_people_stack")
+    enable_character_services = LaunchConfiguration("enable_character_services")
+    people_extension_mode = LaunchConfiguration("people_extension_mode")
     enable_material_stack = LaunchConfiguration("enable_material_stack")
     enable_navmesh = LaunchConfiguration("enable_navmesh")
     enable_scene_collision_repair = LaunchConfiguration("enable_scene_collision_repair")
@@ -69,6 +71,16 @@ def generate_launch_description():
             "enable_people_stack",
             default_value="false",
             description="Load AnimGraph/People/Replicator stack. Keep false for robot/lidar bridge memory tests.",
+        ),
+        DeclareLaunchArgument(
+            "enable_character_services",
+            default_value="false",
+            description="Register Isaac pedestrian spawn/move services and import the character backend.",
+        ),
+        DeclareLaunchArgument(
+            "people_extension_mode",
+            default_value="minimal",
+            description="People extension preset: minimal, people, nav, replicator_agent_core, full, etc.",
         ),
         DeclareLaunchArgument(
             "enable_material_stack",
@@ -180,6 +192,8 @@ def generate_launch_description():
         SetEnvironmentVariable("ARENA_ISAAC_ACTIVE_FPS", active_fps),
         SetEnvironmentVariable("ARENA_ISAAC_MEM_LOG_SEC", mem_log_sec),
         SetEnvironmentVariable("ARENA_ISAAC_ENABLE_PEOPLE_STACK", enable_people_stack),
+        SetEnvironmentVariable("ARENA_ISAAC_ENABLE_CHARACTER_SERVICES", enable_character_services),
+        SetEnvironmentVariable("ARENA_ISAAC_PEOPLE_EXTENSION_MODE", people_extension_mode),
         SetEnvironmentVariable("ARENA_ISAAC_ENABLE_MATERIAL_STACK", enable_material_stack),
         SetEnvironmentVariable("ARENA_ISAAC_ENABLE_NAVMESH", enable_navmesh),
         SetEnvironmentVariable("ARENA_ISAAC_ENABLE_SCENE_COLLISION_REPAIR", enable_scene_collision_repair),

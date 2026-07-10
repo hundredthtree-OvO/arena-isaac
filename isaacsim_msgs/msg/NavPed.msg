@@ -1,3 +1,9 @@
 string path
 float32[3] goal_pose
+float32[] path_points_flat
+bool loop_path
 float32 velocity
+bool use_direct_pose
+float32[3] direct_pose
+float32 orientation
+bool stop

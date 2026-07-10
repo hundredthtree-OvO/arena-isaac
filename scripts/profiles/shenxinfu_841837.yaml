@@ -212,6 +212,10 @@ arm_hold:
   - 0.0
   - 0.0
   hard_sync: true
+  disable_gravity: true
+  drive_stiffness: 100000.0
+  drive_damping: 10000.0
+  drive_max_force: 100000.0
 teleop:
   linear: 0.2
   lateral: 0.2
@@ -340,3 +344,4 @@ phases:
     people_extension_mode: replicator_agent_core
     enable_navmesh: false
     lidar_backend: rtx
+    update_rate: 10.0

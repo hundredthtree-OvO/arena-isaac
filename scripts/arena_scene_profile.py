@@ -140,6 +140,17 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         env["ARENA_ISAAC_LIDAR_RANGE_OFFSET_M"] = str(lidar.get("range_offset_m"))
     env["ARENA_ISAAC_LIDAR_PUBLISH_POINTS"] = "true" if bool(lidar.get("publish_points", False)) else "false"
     env["ARENA_ISAAC_LIDAR_VISUALIZE"] = "true" if bool(lidar.get("visualize", True)) else "false"
+    synth_lidar = lidar.get("synthetic_2d", {}) or {}
+    for key, env_name in (
+        ("samples", "ARENA_ISAAC_LIDAR_SAMPLES"),
+        ("fov_deg", "ARENA_ISAAC_LIDAR_FOV_DEG"),
+        ("range_min", "ARENA_ISAAC_LIDAR_RANGE_MIN"),
+        ("range_max", "ARENA_ISAAC_LIDAR_RANGE_MAX"),
+        ("update_rate", "ARENA_ISAAC_LIDAR_UPDATE_RATE"),
+    ):
+        value = phase_cfg.get(key, synth_lidar.get(key))
+        if value is not None:
+            env[env_name] = str(value)
 
     env["ARENA_ISAAC_PUBLISH_ACTUAL_ODOM_TF"] = "true" if bool(odom_tf.get("publish_actual", True)) else "false"
     env["ARENA_ISAAC_PUBLISH_SENSOR_STATIC_TF"] = "true" if bool(odom_tf.get("publish_sensor_static_tf", True)) else "false"
@@ -209,6 +220,15 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         env["ARENA_ISAAC_GRIPPER_HOLD_POSITIONS"] = ",".join(str(float(x)) for x in gripper_hold_positions)
     if arm_hold.get("hard_sync") is not None:
         env["ARENA_ISAAC_ARM_HOLD_HARD_SYNC"] = "true" if bool(arm_hold.get("hard_sync")) else "false"
+    if arm_hold.get("disable_gravity") is not None:
+        env["ARENA_ISAAC_ARM_HOLD_DISABLE_GRAVITY"] = "true" if bool(arm_hold.get("disable_gravity")) else "false"
+    for key, env_name in (
+        ("drive_stiffness", "ARENA_ISAAC_HOLD_DRIVE_STIFFNESS"),
+        ("drive_damping", "ARENA_ISAAC_HOLD_DRIVE_DAMPING"),
+        ("drive_max_force", "ARENA_ISAAC_HOLD_DRIVE_MAX_FORCE"),
+    ):
+        if arm_hold.get(key) is not None:
+            env[env_name] = str(arm_hold.get(key))
 
     enable_people_stack = phase_cfg.get("enable_people_stack", bridge.get("enable_people_stack", False))
     enable_material_stack = phase_cfg.get("enable_material_stack", bridge.get("enable_material_stack", False))
@@ -234,6 +254,8 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         f"active_fps:={bridge.get('active_fps', 30)}",
         f"mem_log_sec:={bridge.get('mem_log_sec', 30)}",
         f"enable_people_stack:={as_bool(enable_people_stack)}",
+        f"enable_character_services:={as_bool(enable_character_services)}",
+        f"people_extension_mode:={people_extension_mode}",
         f"enable_material_stack:={as_bool(enable_material_stack)}",
         f"enable_navmesh:={as_bool(enable_navmesh)}",
         f"enable_scene_collision_repair:={as_bool(phase_cfg.get('enable_scene_collision_repair', proxy.get('enable_scene_collision_repair', True)))}",

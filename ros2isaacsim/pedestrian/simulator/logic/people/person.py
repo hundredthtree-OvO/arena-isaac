@@ -1,4 +1,5 @@
 # Low level APIs
+import math
 import os
 import time
 
@@ -32,7 +33,7 @@ from pedestrian.simulator.logic.people_manager import PeopleManager
 
 # Extension APIs
 from pedestrian.simulator.logic.state import State
-from pxr import Gf, Sdf
+from pxr import Gf, Sdf, Usd
 from scipy.spatial.transform import Rotation
 
 import isaacsim.replicator.agent.core
@@ -45,6 +46,10 @@ try:
     from pxr import PhysxSchema  # type: ignore
 except Exception:  # pragma: no cover
     PhysxSchema = None  # type: ignore
+
+
+def _yaw_rad_to_gf_quat(yaw_rad: float):
+    return Gf.Rotation(Gf.Vec3d(0, 0, 1), math.degrees(float(yaw_rad))).GetQuat()
 
 
 class Person:
@@ -132,6 +137,9 @@ class Person:
         # Add the animation graph to the agent, such that it can move around
         self.character_graph = None
         self.add_animation_graph_to_agent()
+        self._anim_motion_state = None
+        self._last_walk_speed = None
+        self._last_pose_read_warn = 0.0
 
         # Set the controller for the person if any and initialize it
         self._controller = controller
@@ -143,14 +151,17 @@ class Person:
         if self._backend:
             self._backend.initialize(self)
 
+        self._active = True
+        self._state_callback_name = self._stage_prefix + "/state"
+        self._update_callback_name = self._stage_prefix + "/update"
+        self._timeline_callback_name = self._stage_prefix + "/start_stop_sim"
+
         # Add a callback to the physics engine to update the current state of the person
-        self._world.add_physics_callback(
-            self._stage_prefix + "/state", self.update_state
-        )
+        self._world.add_physics_callback(self._state_callback_name, self.update_state)
 
         # Add the update method to the physics callback if the world was received
         # so that we can apply the new references to be tracked by the person
-        self._world.add_physics_callback(self._stage_prefix + "/update", self.update)
+        self._world.add_physics_callback(self._update_callback_name, self.update)
 
         # Set the flag that signals if the simulation is running or not
         self._sim_running = False
@@ -161,9 +172,7 @@ class Person:
         self._last_guard_block_log = 0.0
 
         # Add a callback to start/stop of the simulation once the play/stop button is hit
-        self._world.add_timeline_callback(
-            self._stage_prefix + "/start_stop_sim", self.sim_start_stop
-        )
+        self._world.add_timeline_callback(self._timeline_callback_name, self.sim_start_stop)
 
     @property
     def state(self):
@@ -181,6 +190,9 @@ class Person:
         Args:
             event: A timeline event generated from Isaac Sim, such as starting or stoping the simulation.
         """
+
+        if not self._active:
+            return
 
         # If the start/stop button was pressed, then call the start and stop methods accordingly
         if self._world.is_playing() and self._sim_running == False:
@@ -205,6 +217,43 @@ class Person:
         if self._controller:
             self._controller.stop()
 
+    def _set_anim_variable(self, name: str, value):
+        if self.character_graph is None:
+            return
+        try:
+            self.character_graph.set_variable(name, value)
+        except Exception as exc:
+            now = time.monotonic()
+            if float(now) - float(self._last_pose_read_warn) >= 2.0:
+                self._last_pose_read_warn = float(now)
+                carb.log_warn(
+                    f"Failed to set animation variable {name} for {self._stage_prefix}: {exc}"
+                )
+
+    def _set_idle_animation(self):
+        if self._anim_motion_state == "idle":
+            return
+        self._set_anim_variable("Walk", 0.0)
+        self._set_anim_variable("Action", "Idle")
+        self._anim_motion_state = "idle"
+        self._last_walk_speed = None
+
+    def _set_walk_animation(self, active_goal):
+        if self._anim_motion_state != "walk":
+            self._set_anim_variable("Action", "Walk")
+            self._anim_motion_state = "walk"
+        self._set_anim_variable(
+            "PathPoints",
+            [
+                carb.Float3(float(self._state.position[0]), float(self._state.position[1]), float(self._state.position[2])),
+                carb.Float3(float(active_goal[0]), float(active_goal[1]), float(active_goal[2])),
+            ],
+        )
+        speed = float(self._target_speed)
+        if self._last_walk_speed is None or abs(float(self._last_walk_speed) - speed) > 1e-4:
+            self._set_anim_variable("Walk", speed)
+            self._last_walk_speed = speed
+
     def update(self, dt: float):
         """
         Method that implements the logic to make the person move around in the simulation world and also play the animation
@@ -212,6 +261,9 @@ class Person:
         Args:
             dt (float): The time elapsed between the previous and current function calls (s).
         """
+
+        if not self._active or not self._stage_prim_is_valid():
+            return
 
         # Note: this is done to avoid the error of the character_graph being None. The animation graph is only created after the simulation starts
         if not self.character_graph or self.character_graph is None:
@@ -225,12 +277,10 @@ class Person:
 
         # Stop when there is no active target.
         if self._num_path_points <= 0:
-            self.character_graph.set_variable("Walk", 0.0)
-            self.character_graph.set_variable("Action", "Idle")
+            self._set_idle_animation()
             return
         if self._current_point_index < 0 or self._current_point_index >= self._num_path_points:
-            self.character_graph.set_variable("Walk", 0.0)
-            self.character_graph.set_variable("Action", "Idle")
+            self._set_idle_animation()
             return
 
         # Compute the distance between the current position and the active goal.
@@ -245,34 +295,23 @@ class Person:
                     self._path_direction = -1
                     self._current_point_index = self._num_path_points - 2
                 else:
-                    self.character_graph.set_variable("Walk", 0.0)
-                    self.character_graph.set_variable("Action", "Idle")
+                    self._set_idle_animation()
                     return
             elif self._current_point_index < 0:
                 if self._loop_path and self._num_path_points > 1:
                     self._path_direction = 1
                     self._current_point_index = 1
                 else:
-                    self.character_graph.set_variable("Walk", 0.0)
-                    self.character_graph.set_variable("Action", "Idle")
+                    self._set_idle_animation()
                     return
             index_point = self._current_point_index
             active_goal = self._target_position[index_point]
 
         if not self._robot_guard_allows_motion(dt, active_goal):
-            self.character_graph.set_variable("Walk", 0.0)
-            self.character_graph.set_variable("Action", "Idle")
+            self._set_idle_animation()
             return
 
-        self.character_graph.set_variable("Action", "Walk")
-        self.character_graph.set_variable(
-            "PathPoints",
-            [
-                carb.Float3(float(self._state.position[0]), float(self._state.position[1]), float(self._state.position[2])),
-                carb.Float3(float(active_goal[0]), float(active_goal[1]), float(active_goal[2])),
-            ],
-        )
-        self.character_graph.set_variable("Walk", self._target_speed)
+        self._set_walk_animation(active_goal)
 
         # If we have a backend, update the state of the person
         if self._backend:
@@ -311,6 +350,132 @@ class Person:
         self._path_direction = 1
         self._loop_path = bool(loop)
         self._target_speed = float(walk_speed)
+        self._last_walk_speed = None
+
+    def stop_motion(self):
+        self._target_position = np.empty((0, 3), dtype=float)
+        self._num_path_points = 0
+        self._current_point_index = 0
+        self._path_direction = 1
+        self._loop_path = False
+        self._target_speed = 0.0
+        self._set_idle_animation()
+
+    def dispose(self):
+        """Deactivate callbacks before the USD prim is destroyed."""
+        if not getattr(self, "_active", True):
+            return
+        self._active = False
+        self.stop_motion()
+        for method_name, callback_name in (
+            ("remove_physics_callback", getattr(self, "_state_callback_name", "")),
+            ("remove_physics_callback", getattr(self, "_update_callback_name", "")),
+            ("remove_timeline_callback", getattr(self, "_timeline_callback_name", "")),
+        ):
+            remover = getattr(self._world, method_name, None)
+            if callable(remover) and callback_name:
+                try:
+                    remover(callback_name)
+                except Exception:
+                    pass
+        if self._collision_proxy_path:
+            try:
+                omni.kit.commands.execute("IsaacSimDestroyPrim", prim_path=self._collision_proxy_path)
+            except Exception:
+                pass
+            self._collision_proxy_path = None
+        self.character_graph = None
+
+    def set_direct_pose(self, position, yaw: float | None = None, *, stop: bool = True):
+        pos = np.array(position, dtype=float).reshape(3)
+        if yaw is None:
+            yaw = float(Rotation.from_quat(self._state.orientation).as_euler("xyz")[2])
+        self._set_stage_root_pose(pos, float(yaw))
+        self._state.position = pos
+        self._state.orientation = Rotation.from_euler("z", float(yaw), degrees=False).as_quat()
+        self._update_collision_proxy()
+        if stop:
+            self.stop_motion()
+
+    def _set_stage_root_pose(self, position, yaw: float):
+        if self.prim is None or not self.prim.IsValid():
+            return
+        translate_attr = self.prim.GetAttribute("xformOp:translate")
+        if translate_attr:
+            translate_attr.Set(Gf.Vec3d(float(position[0]), float(position[1]), float(position[2])))
+        orient_attr = self.prim.GetAttribute("xformOp:orient")
+        if orient_attr:
+            quat = _yaw_rad_to_gf_quat(float(yaw))
+            if type(orient_attr.Get()) == Gf.Quatf:
+                orient_attr.Set(Gf.Quatf(quat))
+            else:
+                orient_attr.Set(quat)
+
+    @staticmethod
+    def _finite_vector(values, expected_len: int) -> bool:
+        try:
+            arr = np.array(values, dtype=float).reshape(-1)
+        except Exception:
+            return False
+        return len(arr) >= expected_len and bool(np.all(np.isfinite(arr[:expected_len])))
+
+    @staticmethod
+    def _valid_quat_xyzw(values) -> bool:
+        if not Person._finite_vector(values, 4):
+            return False
+        quat = np.array(values, dtype=float).reshape(-1)[:4]
+        return float(np.linalg.norm(quat)) > 1e-6
+
+    def _read_character_graph_pose(self):
+        if self.character_graph is None:
+            return None
+        pos = carb.Float3(0, 0, 0)
+        rot = carb.Float4(0, 0, 0, 0)
+        try:
+            self.character_graph.get_world_transform(pos, rot)
+        except Exception:
+            return None
+        position = np.array([pos[0], pos[1], pos[2]], dtype=float)
+        orientation = np.array([rot.x, rot.y, rot.z, rot.w], dtype=float)
+        if not self._finite_vector(position, 3) or not self._valid_quat_xyzw(orientation):
+            return None
+        previous = np.array(self._state.position, dtype=float).reshape(-1)[:3]
+        if (
+            self._finite_vector(previous, 3)
+            and np.linalg.norm(position) < 1e-3
+            and np.linalg.norm(previous) > 0.75
+            and np.linalg.norm(position - previous) > 0.75
+        ):
+            return None
+        return position, orientation
+
+    def _read_stage_root_pose(self):
+        if self.prim is None or not self.prim.IsValid():
+            return None
+        try:
+            matrix = UsdGeom.Xformable(self.prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+            translation = matrix.ExtractTranslation()
+            quat = matrix.ExtractRotationQuat()
+            imaginary = quat.GetImaginary()
+            real = quat.GetReal()
+        except Exception:
+            return None
+        position = np.array([translation[0], translation[1], translation[2]], dtype=float)
+        orientation = np.array([imaginary[0], imaginary[1], imaginary[2], real], dtype=float)
+        if not self._finite_vector(position, 3) or not self._valid_quat_xyzw(orientation):
+            return None
+        previous = np.array(self._state.position, dtype=float).reshape(-1)[:3]
+        if self._finite_vector(previous, 3):
+            max_safe_jump = max(1.0, float(self._target_speed) * 1.0 + 0.5)
+            if self._num_path_points > 0 and np.linalg.norm(position - previous) > max_safe_jump:
+                return None
+        return position, orientation
+
+    def _warn_pose_read_throttled(self, message: str):
+        now = time.monotonic()
+        if float(now) - float(self._last_pose_read_warn) >= 2.0:
+            self._last_pose_read_warn = float(now)
+            carb.log_warn(message)
 
     def update_state(self, dt: float):
         """
@@ -321,25 +486,39 @@ class Person:
             dt (float): The time elapsed between the previous and current function calls (s).
         """
 
+        if not self._active or not self._stage_prim_is_valid():
+            return
+
         # Note: this is done to avoid the error of the character_graph being None. The animation graph is only created after the simulation starts
         if not self.character_graph or self.character_graph is None:
             self.character_graph = ag.get_character(self.character_skel_root_stage_path)
-        if self.character_graph is None:
+
+        pose = self._read_character_graph_pose()
+        if pose is None:
+            pose = self._read_stage_root_pose()
+        if pose is None:
+            self._warn_pose_read_throttled(
+                f"Keeping previous pedestrian pose for {self._stage_prefix}; "
+                "AnimGraph/root transform was invalid or implausible."
+            )
             return
 
-        # Get the current position of the person
-        pos = carb.Float3(0, 0, 0)
-        rot = carb.Float4(0, 0, 0, 0)
-        self.character_graph.get_world_transform(pos, rot)
-
-        # Update the current state of the person
-        self._state.position = np.array([pos[0], pos[1], pos[2]])
-        self._state.orientation = np.array([rot.x, rot.y, rot.z, rot.w])
+        # Update the current state of the person only after validating the source pose.
+        self._state.position = pose[0]
+        self._state.orientation = pose[1]
         self._update_collision_proxy()
 
         # Signal the controller the updated state
         if self._controller:
             self._controller.update_state(self._state)
+
+    def _stage_prim_is_valid(self):
+        if self.prim is None or not self.prim.IsValid():
+            return False
+        if not self.character_skel_root_stage_path:
+            return False
+        prim = self._current_stage.GetPrimAtPath(self.character_skel_root_stage_path)
+        return prim is not None and prim.IsValid()
 
     def _preview_active_goal(self):
         if self._num_path_points <= 0:
@@ -452,7 +631,7 @@ class Person:
                 translate_attr.Set(Gf.Vec3d(float(init_pos[0]), float(init_pos[1]), float(init_pos[2])))
             orient_attr = self.prim.GetAttribute("xformOp:orient")
             if orient_attr:
-                quat = Gf.Rotation(Gf.Vec3d(0, 0, 1), float(init_yaw)).GetQuat()
+                quat = _yaw_rad_to_gf_quat(float(init_yaw))
                 if type(orient_attr.Get()) == Gf.Quatf:
                     orient_attr.Set(Gf.Quatf(quat))
                 else:

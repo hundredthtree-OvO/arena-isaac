@@ -87,6 +87,13 @@ def _env_float(name: str, default: float) -> float:
         return float(default)
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(float(os.environ.get(name, str(default))))
+    except Exception:
+        return int(default)
+
+
 def _set_display_color(prim, rgb):
     try:
         UsdGeom.Gprim(prim).CreateDisplayColorAttr([Gf.Vec3f(float(rgb[0]), float(rgb[1]), float(rgb[2]))])
@@ -515,6 +522,11 @@ def create_dual_lidar(
     """Attach front/rear 2D RTX lidar sensors to a mobile robot root."""
     publish_points = _env_bool("ARENA_ISAAC_LIDAR_PUBLISH_POINTS", False)
     range_offset_m = _env_float("ARENA_ISAAC_LIDAR_RANGE_OFFSET_M", 0.0)
+    samples = _env_int("ARENA_ISAAC_LIDAR_SAMPLES", int(samples))
+    fov_deg = _env_float("ARENA_ISAAC_LIDAR_FOV_DEG", float(fov_deg))
+    range_min = _env_float("ARENA_ISAAC_LIDAR_RANGE_MIN", float(range_min))
+    range_max = _env_float("ARENA_ISAAC_LIDAR_RANGE_MAX", float(range_max))
+    update_rate = _env_float("ARENA_ISAAC_LIDAR_UPDATE_RATE", float(update_rate))
     ensure_rtx_sensor_coord_frame(
         logger=logger,
         reason=f"create_dual_lidar robot={robot_name}",

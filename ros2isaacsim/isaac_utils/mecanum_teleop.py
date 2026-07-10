@@ -60,7 +60,7 @@ except Exception:  # pragma: no cover
         predict_robot_pose,
     )
 from isaacsim.core.utils.stage import get_current_stage
-from pxr import Gf, Usd, UsdGeom
+from pxr import Gf, Sdf, Usd, UsdGeom
 try:
     from pxr import UsdPhysics
 except Exception:  # pragma: no cover
@@ -79,6 +79,20 @@ except Exception:  # pragma: no cover
 
 
 MECANUM_MODEL_PREFIX = "mecanum730_xms5"
+
+_MECANUM_HOLD_LINK_NAMES = {
+    "XMS5_R800_W4G3B4C_base",
+    "XMS5_R800_W4G3B4C_link1",
+    "XMS5_R800_W4G3B4C_link2",
+    "XMS5_R800_W4G3B4C_link3",
+    "XMS5_R800_W4G3B4C_link4",
+    "XMS5_R800_W4G3B4C_link5",
+    "link6",
+    "tool_link",
+    "gripper_link1",
+    "gripper_link2",
+    "tool_tip_link",
+}
 
 
 @dataclass
@@ -116,6 +130,10 @@ class MecanumConfig:
         0.0,
         0.0,
     ])
+    hold_drive_stiffness: float = 1.0e5
+    hold_drive_damping: float = 1.0e4
+    hold_drive_max_force: float = 1.0e5
+    arm_hold_disable_gravity: bool = True
     # URDF wheel joint origins are approximately +/-0.1575, +/-0.1725 m.
     half_length: float = 0.1575
     half_width: float = 0.1725
@@ -207,6 +225,10 @@ def parse_mecanum_config(robot_model: str) -> MecanumConfig:
     config.physx_upright_max_ang_vel = _env_float("ARENA_ISAAC_PHYSX_ROOT_UPRIGHT_MAX_ANG_VEL", config.physx_upright_max_ang_vel)
     config.physx_fallback_kinematic = _env_bool("ARENA_ISAAC_PHYSX_ROOT_FALLBACK_KINEMATIC", config.physx_fallback_kinematic)
     config.arm_hold_hard_sync = _env_bool("ARENA_ISAAC_ARM_HOLD_HARD_SYNC", config.arm_hold_hard_sync)
+    config.hold_drive_stiffness = _env_float("ARENA_ISAAC_HOLD_DRIVE_STIFFNESS", config.hold_drive_stiffness)
+    config.hold_drive_damping = _env_float("ARENA_ISAAC_HOLD_DRIVE_DAMPING", config.hold_drive_damping)
+    config.hold_drive_max_force = _env_float("ARENA_ISAAC_HOLD_DRIVE_MAX_FORCE", config.hold_drive_max_force)
+    config.arm_hold_disable_gravity = _env_bool("ARENA_ISAAC_ARM_HOLD_DISABLE_GRAVITY", config.arm_hold_disable_gravity)
     config.spawn_settling_sec = max(0.0, _env_float("ARENA_ISAAC_SPAWN_SETTLING_SEC", config.spawn_settling_sec))
     config.spawn_settling_min_stable_sec = max(0.0, _env_float("ARENA_ISAAC_SPAWN_SETTLING_MIN_STABLE_SEC", config.spawn_settling_min_stable_sec))
     config.spawn_settling_timeout_sec = max(config.spawn_settling_sec, _env_float("ARENA_ISAAC_SPAWN_SETTLING_TIMEOUT_SEC", config.spawn_settling_timeout_sec))
@@ -552,6 +574,13 @@ class MecanumRobot:
         self._settling_prev_pos: Optional[np.ndarray] = None
         self._settling_prev_yaw: Optional[float] = None
         self._handoff_completed = False
+        self._warned_missing_articulation_controller = False
+        self._warned_joint_hold_failure = False
+        self._hold_drive_configured = False
+        self._warned_hold_drive_no_match = False
+        self._hold_drive_configured_paths = set()
+        self._hold_gravity_configured_paths = set()
+        self._last_hold_scene_constraint_time = 0.0
 
     def _clock_cb(self, msg):
         try:
@@ -680,6 +709,7 @@ class MecanumRobot:
                 self._roller_joint_indices = roller_joint_indices or None
                 if self._roller_joint_indices:
                     self._roller_hold_positions = self._read_joint_positions(self._roller_joint_indices)
+                self._ensure_hold_scene_constraints(force=True)
             except Exception as exc:
                 if self.config.mode == "hybrid":
                     self._log_warn(f"[{self.name}] articulation wheel control unavailable; hybrid will run as kinematic root control: {exc}")
@@ -796,6 +826,11 @@ class MecanumRobot:
         self._initialized = False
         self._static_tf_sent = False
         self._handoff_completed = True
+        self._hold_drive_configured = False
+        self._warned_hold_drive_no_match = False
+        self._hold_drive_configured_paths.clear()
+        self._hold_gravity_configured_paths.clear()
+        self._last_hold_scene_constraint_time = 0.0
         self._smooth_vx = self._smooth_vy = self._smooth_wz = 0.0
         self._applied_vx = self._applied_vy = self._applied_wz = 0.0
         self._restart_settling_state(
@@ -1035,19 +1070,227 @@ class MecanumRobot:
         except Exception:
             return None
 
+    def _hold_scene_root_prims(self):
+        stage = get_current_stage()
+        if stage is None:
+            return []
+        roots = []
+        seen = set()
+        # Prefer wide asset roots first. Articulation roots can be narrow wrapper
+        # prims that do not contain the imported joint/link prims.
+        for path in (
+            self.asset_root_path,
+            self.prim_path,
+            self.nav_base_path,
+            self.articulation_path,
+            self.handoff_asset_root_path,
+            self.handoff_prim_path,
+            self.handoff_nav_base_path,
+            self.handoff_articulation_path,
+        ):
+            if not path:
+                continue
+            path = str(path)
+            if path in seen:
+                continue
+            seen.add(path)
+            prim = stage.GetPrimAtPath(str(path)) if path else None
+            if prim is not None and prim.IsValid():
+                roots.append(prim)
+        return roots
+
+    def _set_drive_attrs(
+        self,
+        prim,
+        drive_type: str,
+        *,
+        target_position=None,
+        target_velocity=None,
+        stiffness=None,
+        damping=None,
+        max_force=None,
+    ) -> bool:
+        if UsdPhysics is None:
+            return False
+        try:
+            drive = UsdPhysics.DriveAPI.Get(prim, drive_type)
+            if not drive:
+                drive = UsdPhysics.DriveAPI.Apply(prim, drive_type)
+            for getter, creator, value in (
+                (drive.GetTargetPositionAttr, drive.CreateTargetPositionAttr, target_position),
+                (drive.GetTargetVelocityAttr, drive.CreateTargetVelocityAttr, target_velocity),
+                (drive.GetStiffnessAttr, drive.CreateStiffnessAttr, stiffness),
+                (drive.GetDampingAttr, drive.CreateDampingAttr, damping),
+                (drive.GetMaxForceAttr, drive.CreateMaxForceAttr, max_force),
+            ):
+                if value is None:
+                    continue
+                attr = getter()
+                if not attr:
+                    creator(float(value))
+                else:
+                    attr.Set(float(value))
+            return True
+        except Exception:
+            return False
+
+    def _configure_hold_joint_drives(self) -> bool:
+        if UsdPhysics is None:
+            return False
+        roots = self._hold_scene_root_prims()
+        if not roots:
+            return False
+        hold_targets = {
+            str(name): float(pos)
+            for name, pos in zip(self.config.arm_hold_joints, self.config.arm_hold_positions)
+        }
+        hold_targets.update(
+            {
+                str(name): float(pos)
+                for name, pos in zip(self.config.gripper_hold_joints, self.config.gripper_hold_positions)
+            }
+        )
+        if not hold_targets:
+            return False
+
+        updated = 0
+        matched_paths = set()
+        sample_joint_names = []
+        for root in roots:
+            for prim in Usd.PrimRange(root):
+                joint_name = prim.GetName()
+                drive_type = None
+                if prim.IsA(UsdPhysics.RevoluteJoint):
+                    drive_type = "angular"
+                elif prim.IsA(UsdPhysics.PrismaticJoint):
+                    drive_type = "linear"
+                if drive_type is not None and len(sample_joint_names) < 12:
+                    sample_joint_names.append(joint_name)
+                if joint_name not in hold_targets:
+                    continue
+                path = str(prim.GetPath())
+                if path in matched_paths:
+                    continue
+                target_position = hold_targets[joint_name]
+                if drive_type == "angular":
+                    target_position = math.degrees(target_position)
+                elif drive_type != "linear":
+                    continue
+                if self._set_drive_attrs(
+                    prim,
+                    drive_type,
+                    target_position=target_position,
+                    target_velocity=0.0,
+                    stiffness=self.config.hold_drive_stiffness,
+                    damping=self.config.hold_drive_damping,
+                    max_force=self.config.hold_drive_max_force,
+                ):
+                    matched_paths.add(path)
+                    updated += 1
+        if updated:
+            new_paths = matched_paths - self._hold_drive_configured_paths
+            self._hold_drive_configured_paths.update(matched_paths)
+            if new_paths or not self._hold_drive_configured:
+                self._log_info(
+                    f"[{self.name}] configured hold joint drives: joints={updated}, roots={len(roots)}, "
+                    f"stiffness={self.config.hold_drive_stiffness:g}, damping={self.config.hold_drive_damping:g}, "
+                    f"max_force={self.config.hold_drive_max_force:g}"
+                )
+            return True
+        if not self._warned_hold_drive_no_match:
+            self._warned_hold_drive_no_match = True
+            roots_text = ", ".join(str(root.GetPath()) for root in roots)
+            sample_text = ", ".join(sample_joint_names[:12]) if sample_joint_names else "none"
+            self._log_warn(
+                f"[{self.name}] no USD joint drives matched arm/gripper hold joints; "
+                f"roots=[{roots_text}], sample_joint_prims=[{sample_text}]"
+            )
+        return False
+
+    def _configure_hold_link_gravity(self) -> bool:
+        if UsdPhysics is None or not self.config.arm_hold_disable_gravity:
+            return False
+        roots = self._hold_scene_root_prims()
+        if not roots:
+            return False
+
+        updated_paths = set()
+        for root in roots:
+            for prim in Usd.PrimRange(root):
+                if prim.GetName() not in _MECANUM_HOLD_LINK_NAMES:
+                    continue
+                if not prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                    continue
+                try:
+                    attr = prim.GetAttribute("physxRigidBody:disableGravity")
+                    if not attr or not attr.IsValid():
+                        attr = prim.CreateAttribute(
+                            "physxRigidBody:disableGravity",
+                            Sdf.ValueTypeNames.Bool,
+                            custom=False,
+                        )
+                    attr.Set(True)
+                    updated_paths.add(str(prim.GetPath()))
+                except Exception:
+                    continue
+        if not updated_paths:
+            return False
+        new_paths = updated_paths - self._hold_gravity_configured_paths
+        self._hold_gravity_configured_paths.update(updated_paths)
+        if new_paths:
+            self._log_info(
+                f"[{self.name}] disabled gravity on navigation-held arm links: links={len(updated_paths)}, roots={len(roots)}"
+            )
+        return True
+
+    def _ensure_hold_scene_constraints(self, *, force: bool = False):
+        now = time.monotonic()
+        if not force and now - self._last_hold_scene_constraint_time < 1.0:
+            return
+        self._last_hold_scene_constraint_time = now
+        self._configure_hold_link_gravity()
+        self._hold_drive_configured = self._configure_hold_joint_drives()
+
+    def _apply_articulation_action(self, action: ArticulationAction, *, context: str) -> bool:
+        if self._articulation is None:
+            return False
+        apply_action = getattr(self._articulation, "apply_action", None)
+        if callable(apply_action):
+            try:
+                apply_action(action)
+                return True
+            except Exception:
+                pass
+        controller_getter = getattr(self._articulation, "get_articulation_controller", None)
+        if callable(controller_getter):
+            try:
+                controller_getter().apply_action(action)
+                return True
+            except Exception as exc:
+                self._log_warn(f"[{self.name}] failed to apply {context} targets: {exc}")
+                return False
+        if not self._warned_missing_articulation_controller:
+            self._warned_missing_articulation_controller = True
+            self._log_warn(
+                f"[{self.name}] articulation action fallback unavailable; "
+                "joint control will rely on direct joint APIs"
+            )
+        return False
+
     def _apply_joint_hold(self, joint_indices: Optional[List[int]], positions: Optional[np.ndarray], *, hard_sync: bool = True):
         if self._articulation is None or not joint_indices or positions is None:
             return
         indices = np.array(joint_indices, dtype=np.int32)
         targets = np.array(positions[: len(joint_indices)], dtype=np.float32)
         zeros = np.zeros_like(targets)
-        target_applied = False
+        position_applied = False
+        velocity_applied = False
         try:
             self._articulation.set_joint_position_targets(
                 positions=targets,
                 joint_indices=indices,
             )
-            target_applied = True
+            position_applied = True
         except Exception:
             pass
         try:
@@ -1055,16 +1298,17 @@ class MecanumRobot:
                 velocities=zeros,
                 joint_indices=indices,
             )
-            target_applied = True
+            velocity_applied = True
         except Exception:
             pass
-        if target_applied and not hard_sync:
+        if (position_applied or velocity_applied) and not hard_sync:
             return
         try:
             self._articulation.set_joint_positions(
                 positions=targets,
                 joint_indices=indices,
             )
+            position_applied = True
         except Exception:
             pass
         try:
@@ -1072,18 +1316,27 @@ class MecanumRobot:
                 velocities=zeros,
                 joint_indices=indices,
             )
-            return
+            velocity_applied = True
         except Exception:
             pass
+        if position_applied:
+            return
+        self._ensure_hold_scene_constraints()
+        if self._hold_drive_configured:
+            return
         try:
             action = ArticulationAction(
                 joint_positions=targets,
                 joint_velocities=zeros,
                 joint_indices=indices,
             )
-            self._articulation.get_articulation_controller().apply_action(action)
+            if self._apply_articulation_action(action, context="joint hold"):
+                return
         except Exception as exc:
             self._log_warn(f"[{self.name}] failed to apply joint hold targets: {exc}")
+        if not velocity_applied and not self._warned_joint_hold_failure:
+            self._warned_joint_hold_failure = True
+            self._log_warn(f"[{self.name}] failed to apply joint hold targets")
 
     def _apply_joint_velocity_targets(self, speeds: np.ndarray):
         if self._articulation is None or self._joint_indices is None:
@@ -1112,11 +1365,12 @@ class MecanumRobot:
                 joint_velocities=speeds,
                 joint_indices=np.array(self._joint_indices, dtype=np.int32),
             )
-            self._articulation.get_articulation_controller().apply_action(action)
+            self._apply_articulation_action(action, context="wheel velocity")
         except Exception as exc:
             self._log_warn(f"[{self.name}] failed to apply wheel velocity targets: {exc}")
 
     def _apply_navigation_hold_targets(self):
+        self._ensure_hold_scene_constraints()
         self._apply_joint_hold(
             self._arm_joint_indices,
             np.array(self.config.arm_hold_positions, dtype=np.float32),

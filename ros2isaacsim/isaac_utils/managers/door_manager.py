@@ -704,6 +704,14 @@ class DoorManager:
             self._pedestrians.append(resolved)
         _log_debug(f"Added pedestrian to door manager: {prim_path} -> resolved: {resolved}")
 
+    def remove_pedestrian(self, prim_path: str):
+        resolved = self._resolve_entity_prim(prim_path)
+        self._pedestrians = [
+            path for path in self._pedestrians
+            if path != resolved and not str(path).startswith(str(resolved).rstrip("/") + "/")
+        ]
+        _log_debug(f"Removed pedestrian from door manager: {prim_path} -> resolved: {resolved}")
+
     def _register_entity_cb(self, msg):
         """Handle simple registration messages published on /isaac/register_entity.
         Expected payload: '<role>|<prim_path>' where role is 'robot' or 'pedestrian'.

@@ -307,6 +307,7 @@ from isaac_utils.services import import_obstacle
 from isaac_utils.services import spawn_ped
 from isaac_utils.services import move_ped
 from isaac_utils.services import delete_all_characters
+from isaac_utils.services import start_pedestrian_state_publisher
 from isaac_utils.services import spawn_floor
 from isaac_utils.services import spawn_door
 from isaac_utils.managers.door_manager import door_manager
@@ -726,6 +727,7 @@ def create_controller(time=120):
     spawn_ped(controller)
     move_ped(controller)
     delete_all_characters(controller)
+    start_pedestrian_state_publisher(controller)
     spawn_floor(controller)
     spawn_door(controller)
     export_collision_proxies_service(controller)
