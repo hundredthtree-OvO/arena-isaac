@@ -40,6 +40,7 @@ setup(
             "client_pub_ped=ros2isaacsim.client_publisher:main",
             "spawn_mecanum_teleop=ros2isaacsim.spawn_mecanum_teleop:main",
             "wasd_combo_teleop=ros2isaacsim.wasd_combo_teleop:main",
+            "gamepad_diff_teleop=ros2isaacsim.gamepad_diff_teleop:main",
             "cmd_vel_pulse=ros2isaacsim.cmd_vel_pulse:main",
             "spawn_v10_scene_lidar_validation=ros2isaacsim.spawn_v10_scene_lidar_validation:main",
             "export_collision_proxies=ros2isaacsim.export_collision_proxies:main",

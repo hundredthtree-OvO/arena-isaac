@@ -1,6 +1,6 @@
 # shenxinfu_841837 profile: voxel guard + manual LiDAR + actual odom/TF.
 # Default run from repo root:
-#   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge voxel_guard
+#   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge rtx_scan
 #   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml spawn
 #   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml teleop
 
@@ -68,24 +68,22 @@ robot_geometry:
   - marker
   - debug
 lidar:
-  # Default navigation scan source.  This keeps the real calibration frames but
-  # avoids RTX raycast self-occlusion from the full robot mesh.
-  backend: synthetic_2d
+  # RTX is the main navigation scan source. synthetic_2d remains an explicit
+  # fallback for environments where RTX cannot be used.
+  backend: rtx
   mount_source: calibration_urdf
   calibration_dir: /home/stardust/resources/calibration/src/stardust_calibration/urdf/v25730
   front_frame: base_scan_01
   rear_frame: base_scan_02
   front_topic: /front_scan
   rear_topic: /rear_scan
-  # RTX lidar is disabled when backend=synthetic_2d.  Set backend=rtx only for
-  # sensor/raycast debugging.
   # Range offset is applied only to the RTX backend and can help suppress
   # near-field self hits from the robot body.
   range_offset_m: 0.03
   publish_points: false
   visualize: false
   synthetic_2d:
-    # Scheme 1 preferred static source: live OccupancyGrid or an explicit map.yaml.
+    # Synthetic fallback source: live OccupancyGrid or an explicit map.yaml.
     # Keep map_path only as a compatibility fallback until the shenxinfu map YAML
     # or /map publisher is fully wired.
     map_topic: /map
@@ -220,6 +218,20 @@ teleop:
   linear: 0.2
   lateral: 0.2
   angular: 0.5
+gamepad:
+  # URDF wheel centers are at y=+/-0.1725 m, giving a 0.345 m track width.
+  device_id: 0
+  joy_topic: /joy
+  cmd_vel_topic: /cmd_vel_gamepad_diff
+  linear_axis: 1
+  angular_axis: 0
+  enable_button: 4
+  linear_scale: 0.2
+  angular_scale: 0.5
+  deadzone: 0.1
+  joy_timeout_sec: 0.5
+  priority_timeout_sec: 0.3
+  track_width_m: 0.345
 pedestrians:
   # Radius at which the bridge switches to the next AnimGraph path point.
   # Keep this aligned with toilet_benchmark.director.actor_stop_radius_m while tuning.
@@ -334,6 +346,7 @@ phases:
     enable_character_services: true
     people_extension_mode: replicator_agent_core
     enable_navmesh: false
+    lidar_backend: synthetic_2d
   rtx_scan:
     proxy_source: 'off'
     proxy_visible: false

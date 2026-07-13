@@ -56,7 +56,6 @@ def _expand(path: Any) -> str:
 
 def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str, str]]:
     bridge = profile.get("bridge", {})
-    scene = profile.get("scene", {})
     proxy = profile.get("proxy", {})
     guard = profile.get("guard", {})
     collision2d = profile.get("collision2d", {})
@@ -69,6 +68,7 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     motion = profile.get("motion", {})
     physx = profile.get("physx_root_velocity", {})
     arm_hold = profile.get("arm_hold", {})
+    gamepad = profile.get("gamepad", {})
     phases = profile.get("phases", {})
     phase_cfg = phases.get(phase, {})
     if not phase_cfg:
@@ -161,6 +161,13 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     env["ARENA_ISAAC_ODOM_FRAME"] = str(robot.get("odom_frame", "odom"))
     env["ARENA_ISAAC_BASE_FRAME"] = str(robot.get("base_frame", "base_link"))
     env["ARENA_ISAAC_CMD_VEL_APPLIED_TOPIC"] = str(robot.get("cmd_vel_applied_topic", "/cmd_vel_applied"))
+    env["ARENA_ISAAC_DIFF_CMD_VEL_TOPIC"] = str(
+        gamepad.get("cmd_vel_topic", "/cmd_vel_gamepad_diff")
+    )
+    env["ARENA_ISAAC_DIFF_CMD_TIMEOUT_SEC"] = str(
+        gamepad.get("priority_timeout_sec", 0.30)
+    )
+    env["ARENA_ISAAC_DIFF_TRACK_WIDTH"] = str(gamepad.get("track_width_m", 0.345))
     env["ARENA_ISAAC_FRONT_LASER_FRAME"] = str(lidar.get("front_frame", robot.get("front_laser_frame", "front_laser_link")))
     env["ARENA_ISAAC_REAR_LASER_FRAME"] = str(lidar.get("rear_frame", robot.get("rear_laser_frame", "rear_laser_link")))
     if robot.get("auto_ground_align") is not None:
@@ -398,6 +405,23 @@ def teleop_cmd(profile: Dict[str, Any]) -> List[str]:
     ]
 
 
+def gamepad_cmd(profile: Dict[str, Any]) -> List[str]:
+    gamepad = profile.get("gamepad", {})
+    return [
+        "ros2", "launch", "ros2isaacsim", "gamepad_diff_teleop.launch.py",
+        f"device_id:={gamepad.get('device_id', 0)}",
+        f"joy_topic:={gamepad.get('joy_topic', '/joy')}",
+        f"output_topic:={gamepad.get('cmd_vel_topic', '/cmd_vel_gamepad_diff')}",
+        f"linear_axis:={gamepad.get('linear_axis', 1)}",
+        f"angular_axis:={gamepad.get('angular_axis', 0)}",
+        f"enable_button:={gamepad.get('enable_button', 4)}",
+        f"linear_scale:={gamepad.get('linear_scale', 0.20)}",
+        f"angular_scale:={gamepad.get('angular_scale', 0.50)}",
+        f"deadzone:={gamepad.get('deadzone', 0.10)}",
+        f"joy_timeout_sec:={gamepad.get('joy_timeout_sec', 0.50)}",
+    ]
+
+
 def synthetic_laser_cmd(profile: Dict[str, Any]) -> List[str]:
     lidar = profile.get("lidar", {}) or {}
     synth = lidar.get("synthetic_2d", {}) or {}
@@ -543,6 +567,7 @@ def main(argv=None) -> int:
     pv = sub.add_parser("voxel")
     pv.add_argument("action", choices=["build", "render", "summary", "pcd"])
     sub.add_parser("teleop")
+    sub.add_parser("gamepad")
     sub.add_parser("synthetic_laser")
     sub.add_parser("pedestrians")
     p_scheme1 = sub.add_parser("scheme1")
@@ -573,6 +598,8 @@ def main(argv=None) -> int:
         return rc
     if args.cmd == "teleop":
         return run(teleop_cmd(profile), dry_run=args.dry_run)
+    if args.cmd == "gamepad":
+        return run(gamepad_cmd(profile), dry_run=args.dry_run)
     if args.cmd == "synthetic_laser":
         return run(synthetic_laser_cmd(profile), dry_run=args.dry_run)
     if args.cmd == "pedestrians":

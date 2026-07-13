@@ -7,11 +7,12 @@
 控制链：
 
 ```text
-/cmd_vel
+键鼠 /cmd_vel                  -> 麦轮 vx/vy/wz 映射
+手柄 /cmd_vel_gamepad_diff     -> 差速 vx/wz 映射（vy 强制为 0）
+  -> 同时运行时按住手柄 deadman 优先
   -> velocity smoother / acceleration limiter
   -> voxel guard 上层安全过滤
-  -> wheel joint velocity targets
-  -> PhysX 积分与 CollisionAPI 接触响应
+  -> wheel joint velocity targets + root motion
   -> actual /odom + odom->base_link TF
 ```
 
@@ -76,7 +77,7 @@ source install/setup.bash
 
 ## 4. 启动
 
-终端 1：bridge（方案①推荐：`social_nav`）
+终端 1：bridge（主链路：RTX scan）
 
 ```bash
 cd ~/resources/arena_ws
@@ -84,12 +85,6 @@ source /opt/ros/humble/setup.bash
 . arena.bash
 source install/setup.bash
 cd ~/resources/arena_ws/src/arena/arena-isaac
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge social_nav
-```
-
-如果要单独恢复真实传感器 scan（RTX）做验证，改用：
-
-```bash
 python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge rtx_scan
 ```
 
@@ -106,16 +101,39 @@ cd ~/resources/arena_ws/src/arena/arena-isaac
 python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml spawn
 ```
 
-终端 3：synthetic laser（方案①静态 map + 动态行人叠加）
+终端 3A：键鼠麦轮控制
 
 ```bash
-cd ~/resources/arena_ws
-source /opt/ros/humble/setup.bash
-. arena.bash
-source install/setup.bash
 cd ~/resources/arena_ws/src/arena/arena-isaac
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml synthetic_laser
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml teleop
 ```
+
+键鼠窗口需要获得焦点。`W/S` 前后、`A/D` 横移、`Q/E` 旋转；控制器继续按麦轮公式处理 `/cmd_vel`。
+
+终端 3B：手柄差速控制
+
+```bash
+cd ~/resources/arena_ws/src/arena/arena-isaac
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml gamepad
+```
+
+该命令同时启动 ROS `joy_node` 和 `gamepad_diff_teleop`。默认左摇杆纵轴控制 `vx`、横轴控制 `wz`，按住 LB（默认 button 4）才发送命令；控制器根据 `0.345 m` 轮距执行差速公式，且始终令 `vy=0`。
+
+操作方式：
+
+- 启动命令前先连接手柄，并确认 Linux 中存在 `/dev/input/js0`。
+- 按住 LB 后，左摇杆前后控制机器人前进/后退，左右控制原地或行进转向。
+- 松开 LB 会立即发送一次停止命令；不按 deadman 时手柄不会持续占用控制权。
+- 摇杆中心小幅漂移由 `gamepad.deadzone` 过滤；速度由 `linear_scale` 和 `angular_scale` 调整。
+- 如果前后或转向方向相反，可以把对应 `scale` 改为负数；如果摇杆无响应，使用 `/joy` 输出确认 axis/button 编号。
+
+键鼠和手柄命令可以分别启动，也可以同时运行。同时运行时，按住 deadman 的手柄优先；松开后键鼠恢复。如果按键或摇杆编号不匹配，先检查：
+
+```bash
+ros2 topic echo /joy
+```
+
+然后修改 `scripts/profiles/shenxinfu_841837.yaml` 中的 `gamepad.linear_axis`、`angular_axis` 和 `enable_button`。
 
 终端 4：pedestrians（可选）
 
@@ -128,20 +146,27 @@ cd ~/resources/arena_ws/src/arena/arena-isaac
 python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml pedestrians
 ```
 
-终端 5：teleop（可选）
-
-```bash
-cd ~/resources/arena_ws/src/arena/arena-isaac
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml teleop
-```
-
 RViz：
 
 ```bash
 rviz2 --ros-args -p use_sim_time:=true
 ```
 
-也可以先打印方案①专用顺序：
+### Synthetic laser 回退链路
+
+Synthetic laser 不再是默认主链路，仅在 RTX 不可用或需要静态地图对齐诊断时使用。终端 1 改为：
+
+```bash
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge social_nav
+```
+
+spawn 完成后另开终端：
+
+```bash
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml synthetic_laser
+```
+
+也可以打印 synthetic 回退链路的专用顺序：
 
 ```bash
 python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml scheme1 steps

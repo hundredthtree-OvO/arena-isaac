@@ -42,6 +42,11 @@ except Exception:  # pragma: no cover
     QoSProfile = None  # type: ignore
     ReliabilityPolicy = None  # type: ignore
 from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
+from ros2isaacsim.drive_kinematics import (
+    DIFFERENTIAL_DRIVE,
+    MECANUM_DRIVE,
+    wheel_angular_speeds,
+)
 try:
     from isaac_utils.collision_guard import KinematicCollisionGuard, config_from_env as collision_guard_config_from_env
 except Exception:  # pragma: no cover - imported inside Isaac Sim normally
@@ -137,6 +142,7 @@ class MecanumConfig:
     # URDF wheel joint origins are approximately +/-0.1575, +/-0.1725 m.
     half_length: float = 0.1575
     half_width: float = 0.1725
+    differential_track_width: float = 0.345
     # Estimated wheel radius. If the robot is too slow/fast, tune this first.
     wheel_radius: float = 0.060
     max_wheel_speed: float = 20.0
@@ -148,6 +154,7 @@ class MecanumConfig:
     wheel_signs: List[float] = field(default_factory=lambda: [1.0, -1.0, 1.0, -1.0])
     mode: str = "joint"  # joint | physx_wheels | hybrid | kinematic | physx_root_velocity
     timeout_sec: float = 0.5
+    differential_timeout_sec: float = 0.30
     # v18: optional velocity slew-rate limiter for more realistic mobile-base
     # commands.  Values can be overridden with ARENA_ISAAC_MOTION_* env vars.
     max_linear_accel: float = 0.40
@@ -212,6 +219,14 @@ def parse_mecanum_config(robot_model: str) -> MecanumConfig:
     config.max_linear_speed = _env_float("ARENA_ISAAC_MAX_LINEAR_SPEED", config.max_linear_speed)
     config.max_lateral_speed = _env_float("ARENA_ISAAC_MAX_LATERAL_SPEED", config.max_lateral_speed)
     config.max_angular_speed = _env_float("ARENA_ISAAC_MAX_ANGULAR_SPEED", config.max_angular_speed)
+    config.differential_track_width = max(
+        0.0,
+        _env_float("ARENA_ISAAC_DIFF_TRACK_WIDTH", config.differential_track_width),
+    )
+    config.differential_timeout_sec = max(
+        0.05,
+        _env_float("ARENA_ISAAC_DIFF_CMD_TIMEOUT_SEC", config.differential_timeout_sec),
+    )
     config.max_linear_accel = _env_float("ARENA_ISAAC_MOTION_MAX_LINEAR_ACCEL", config.max_linear_accel)
     config.max_lateral_accel = _env_float("ARENA_ISAAC_MOTION_MAX_LATERAL_ACCEL", config.max_lateral_accel)
     config.max_angular_accel = _env_float("ARENA_ISAAC_MOTION_MAX_ANGULAR_ACCEL", config.max_angular_accel)
@@ -537,6 +552,10 @@ class MecanumRobot:
         self._vx = 0.0
         self._vy = 0.0
         self._wz = 0.0
+        self._diff_vx = 0.0
+        self._diff_wz = 0.0
+        self._last_diff_cmd_time = 0.0
+        self._active_drive_mode = MECANUM_DRIVE
         self._applied_vx = 0.0
         self._applied_vy = 0.0
         self._applied_wz = 0.0
@@ -624,6 +643,23 @@ class MecanumRobot:
         if (abs(vx) > 1e-4 or abs(vy) > 1e-4 or abs(wz) > 1e-4) and (now - self._last_cmd_log_t) > 1.0:
             self._last_cmd_log_t = now
             self._log_info(f"[{self.name}] cmd_vel received: vx={vx:+.3f}, vy={vy:+.3f}, wz={wz:+.3f}")
+
+    def set_differential_cmd(self, msg: Twist):
+        """Store a gamepad command; a fresh differential command has priority."""
+        if self._settling_state != "ready":
+            return
+        c = self.config
+        vx = max(-c.max_linear_speed, min(c.max_linear_speed, float(msg.linear.x)))
+        wz = max(-c.max_angular_speed, min(c.max_angular_speed, float(msg.angular.z)))
+        with self._lock:
+            self._diff_vx, self._diff_wz = vx, wz
+            self._last_diff_cmd_time = time.monotonic()
+        now = time.monotonic()
+        if (abs(vx) > 1e-4 or abs(wz) > 1e-4) and (now - self._last_cmd_log_t) > 1.0:
+            self._last_cmd_log_t = now
+            self._log_info(
+                f"[{self.name}] differential cmd received: vx={vx:+.3f}, wz={wz:+.3f}"
+            )
 
     def _log_info(self, text: str):
         if self.logger:
@@ -1020,26 +1056,37 @@ class MecanumRobot:
             right=right,
         )
 
-    def _current_cmd(self):
+    def _selected_cmd(self):
         with self._lock:
-            if time.monotonic() - self._last_cmd_time > self.config.timeout_sec:
-                return 0.0, 0.0, 0.0
-            return self._vx, self._vy, self._wz
+            now = time.monotonic()
+            if now - self._last_diff_cmd_time <= self.config.differential_timeout_sec:
+                return self._diff_vx, 0.0, self._diff_wz, DIFFERENTIAL_DRIVE
+            if now - self._last_cmd_time <= self.config.timeout_sec:
+                return self._vx, self._vy, self._wz, MECANUM_DRIVE
+            return 0.0, 0.0, 0.0, MECANUM_DRIVE
 
-    def _wheel_speeds(self, vx: float, vy: float, wz: float):
+    def _current_cmd(self):
+        vx, vy, wz, _drive_mode = self._selected_cmd()
+        return vx, vy, wz
+
+    def _wheel_speeds(self, vx: float, vy: float, wz: float, drive_mode: str = MECANUM_DRIVE):
         c = self.config
-        k = c.half_length + c.half_width
-        r = c.wheel_radius
-        # Robot frame: x forward, y left, z yaw CCW.
-        omega = np.array([
-            (vx - vy - k * wz) / r,  # front-left
-            (vx + vy + k * wz) / r,  # front-right
-            (vx + vy - k * wz) / r,  # rear-left
-            (vx - vy + k * wz) / r,  # rear-right
-        ], dtype=np.float32)
-        omega *= np.array(c.wheel_signs, dtype=np.float32)
-        omega = np.clip(omega, -c.max_wheel_speed, c.max_wheel_speed)
-        return omega
+        half_width = (
+            0.5 * c.differential_track_width
+            if drive_mode == DIFFERENTIAL_DRIVE
+            else c.half_width
+        )
+        return wheel_angular_speeds(
+            vx=vx,
+            vy=vy,
+            wz=wz,
+            drive_mode=drive_mode,
+            half_length=c.half_length,
+            half_width=half_width,
+            wheel_radius=c.wheel_radius,
+            wheel_signs=c.wheel_signs,
+            max_wheel_speed=c.max_wheel_speed,
+        )
 
     def _resolve_dof_index(self, joint_name: str, dof_names: Optional[List[str]] = None) -> Optional[int]:
         idx = None
@@ -1685,7 +1732,14 @@ class MecanumRobot:
 
         return bool(wrote_pose or wrote_velocity)
 
-    def _apply_physx_wheels_base(self, vx: float, vy: float, wz: float, dt: float):
+    def _apply_physx_wheels_base(
+        self,
+        vx: float,
+        vy: float,
+        wz: float,
+        dt: float,
+        drive_mode: str = MECANUM_DRIVE,
+    ):
         try:
             pos, quat = _get_usd_xform_pose(self.prim_path)
             heading = _quat_wxyz_to_yaw(quat)
@@ -1698,7 +1752,7 @@ class MecanumRobot:
         self._last_guard_mode = guard_mode
         self._publish_applied_cmd_vel()
 
-        wheel_speeds = self._wheel_speeds(vx, vy, wz)
+        wheel_speeds = self._wheel_speeds(vx, vy, wz, drive_mode)
         self._apply_navigation_hold_targets()
         self._apply_joint_velocity_targets(wheel_speeds)
         wrote = self._apply_motion_based_root(pos, quat, vx, vy, wz, dt)
@@ -1760,9 +1814,17 @@ class MecanumRobot:
         if self._maybe_update_settling_state(now, dt):
             return
 
-        vx, vy, wz = self._current_cmd()
+        vx, vy, wz, drive_mode = self._selected_cmd()
+        if drive_mode != self._active_drive_mode:
+            self._active_drive_mode = drive_mode
+            if drive_mode == DIFFERENTIAL_DRIVE:
+                self._smooth_vy = 0.0
+            self._log_info(f"[{self.name}] active drive input: {drive_mode}")
         vx, vy, wz = self._apply_velocity_smoothing(vx, vy, wz, dt)
-        wheel_speeds = self._wheel_speeds(vx, vy, wz)
+        if drive_mode == DIFFERENTIAL_DRIVE:
+            vy = 0.0
+            self._smooth_vy = 0.0
+        wheel_speeds = self._wheel_speeds(vx, vy, wz, drive_mode)
 
         if self.config.mode != "joint":
             self._apply_navigation_hold_targets()
@@ -1770,7 +1832,7 @@ class MecanumRobot:
         if self.config.mode in ("joint", "hybrid") and self._articulation is not None:
             self._apply_joint_velocity_targets(wheel_speeds)
         elif self.config.mode == "physx_wheels":
-            self._apply_physx_wheels_base(vx, vy, wz, dt)
+            self._apply_physx_wheels_base(vx, vy, wz, dt, drive_mode)
         elif self.config.mode == "physx_root_velocity" and self._articulation is not None:
             # Visual wheel rolling only.  Chassis traction comes from root velocity.
             self._apply_joint_velocity_targets(wheel_speeds)
@@ -1811,6 +1873,9 @@ class MecanumTeleopManager:
         if not self.node:
             raise RuntimeError("MecanumTeleopManager.register_node() must be called before add_robot().")
         config = parse_mecanum_config(robot_model)
+        differential_topic = str(
+            os.environ.get("ARENA_ISAAC_DIFF_CMD_VEL_TOPIC", "/cmd_vel_gamepad_diff")
+        ).strip()
         robot = MecanumRobot(
             name=name,
             prim_path=prim_path,
@@ -1835,9 +1900,22 @@ class MecanumTeleopManager:
 
         sub = self.node.create_subscription(Twist, cmd_vel_topic, _cb, 10)
         self.subscriptions.append(sub)
+
+        if differential_topic and differential_topic != cmd_vel_topic:
+            def _diff_cb(msg, robot_name=name):
+                self.robots[robot_name].set_differential_cmd(msg)
+
+            diff_sub = self.node.create_subscription(
+                Twist,
+                differential_topic,
+                _diff_cb,
+                10,
+            )
+            self.subscriptions.append(diff_sub)
         self.node.get_logger().info(
             f"Registered mecanum teleop robot {name}: prim={prim_path}, nav_base={nav_base_path or prim_path}, "
-            f"articulation={articulation_path or prim_path}, topic={cmd_vel_topic}, mode={config.mode}, "
+            f"articulation={articulation_path or prim_path}, topic={cmd_vel_topic}, "
+            f"diff_topic={differential_topic or 'disabled'}, mode={config.mode}, "
             f"actual_odom_tf={robot.publish_actual_odom_tf}, odom_topic={robot.odom_topic}, applied_topic={robot.applied_cmd_vel_topic}, "
             f"handoff={'enabled' if robot.config.full_asset_handoff_enabled and handoff_prim_path else 'disabled'}"
         )
