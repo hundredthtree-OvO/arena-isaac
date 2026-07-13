@@ -13,6 +13,7 @@ from isaacsim.core.utils import prims
 try:
     from isaac_utils.dynamic_actor_guard import (
         PedestrianGuardState,
+        circle_intersects_grid_cells,
         movement_allowed,
         pedestrian_robot_scores,
         predict_pedestrian_step,
@@ -20,10 +21,15 @@ try:
 except Exception:  # pragma: no cover
     from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
         PedestrianGuardState,
+        circle_intersects_grid_cells,
         movement_allowed,
         pedestrian_robot_scores,
         predict_pedestrian_step,
     )
+try:
+    from isaac_utils.voxel_guard import VoxelCollisionGuard, VoxelGuardConfig
+except Exception:  # pragma: no cover
+    from ros2isaacsim.isaac_utils.voxel_guard import VoxelCollisionGuard, VoxelGuardConfig
 from isaac_utils.utils.assets import get_assets_root_path_safe
 from isaac_utils.animgraph_people import normalize_stage_name
 
@@ -33,13 +39,14 @@ from pedestrian.simulator.logic.people_manager import PeopleManager
 
 # Extension APIs
 from pedestrian.simulator.logic.state import State
-from pxr import Gf, Sdf, Usd
+from pxr import Gf, Sdf, Usd, Vt
 from scipy.spatial.transform import Rotation
 
-import isaacsim.replicator.agent.core
 from isaacsim.replicator.agent.core.settings import PrimPaths
+from isaacsim.replicator.agent.core.agent_manager import AgentManager
+from isaacsim.replicator.agent.core.settings import BehaviorScriptPaths
 from isaacsim.replicator.agent.core.stage_util import CharacterUtil
-from isaacsim.replicator.agent.core.simulation import SimulationManager
+from omni.anim.people.scripts.global_character_position_manager import GlobalCharacterPositionManager
 from pxr import UsdGeom, UsdPhysics
 
 try:
@@ -50,6 +57,15 @@ except Exception:  # pragma: no cover
 
 def _yaw_rad_to_gf_quat(yaw_rad: float):
     return Gf.Rotation(Gf.Vec3d(0, 0, 1), math.degrees(float(yaw_rad))).GetQuat()
+
+
+def _pedestrian_stop_radius() -> float:
+    """Return the AnimGraph waypoint-switch radius configured for this bridge."""
+    try:
+        value = float(os.environ.get("ARENA_ISAAC_PEDESTRIAN_STOP_RADIUS_M", "0.5"))
+    except (TypeError, ValueError):
+        value = 0.5
+    return max(0.01, value)
 
 
 class Person:
@@ -66,11 +82,14 @@ class Person:
     collision_proxy_radius = 0.22
     collision_proxy_height = 1.00
     collision_proxy_center_z = 0.90
+    anim_graph_variable_prefix = "anim:graph:variable:"
+    required_anim_graph_variables = ("Action", "Walk", "PathPoints")
+    _shared_static_voxel_guard = None
 
     if people_asset_folder:
         assets_root_path = people_asset_folder
     else:
-        root_path = get_assets_root_path()
+        root_path = get_assets_root_path_safe()
         if root_path is not None:
             assets_root_path = "{}/Isaac/People/Characters".format(root_path)
 
@@ -108,6 +127,8 @@ class Person:
         # Set the target position for the character
         self._target_position = np.array(init_pos)
         self._target_speed = 0.0
+        self._target_yaw = None
+        self._path_point_arrival_radius = _pedestrian_stop_radius()
 
         # Set the transition point for the path points
         self._transition_point = np.array(init_pos)
@@ -134,12 +155,25 @@ class Person:
         # Spawn the agent in the world
         self.spawn_agent(self.char_usd_file, self._stage_prefix, init_pos, init_yaw)
 
-        # Add the animation graph to the agent, such that it can move around
+        # Add the animation graph to the agent, such that it can move around.
+        # The Biped asset may still be loading, so failed setup is retried from
+        # the physics callbacks before any cached movement command is executed.
         self.character_graph = None
-        self.add_animation_graph_to_agent()
+        self._anim_graph_setup_ok = False
+        self._anim_graph_ready = False
+        self._next_anim_graph_setup_attempt = 0.0
+        self._last_pose_read_warn = 0.0
+        self._anim_graph_setup_ok = self.add_animation_graph_to_agent()
         self._anim_motion_state = None
         self._last_walk_speed = None
-        self._last_pose_read_warn = 0.0
+        self._behavior_script_enabled = self._attach_behavior_script()
+        self._motion_command_generation = 0
+        self._dispatched_command_generation = 0
+        self._motion_state = "idle"
+        self._pose_valid = False
+        self._last_valid_pose_time = 0.0
+        self._last_static_guard_warn = 0.0
+        self._static_voxel_guard = self._get_static_voxel_guard()
 
         # Set the controller for the person if any and initialize it
         self._controller = controller
@@ -183,6 +217,14 @@ class Person:
         """
         return self._state
 
+    @property
+    def anim_graph_setup_ok(self) -> bool:
+        return bool(self._anim_graph_setup_ok)
+
+    @property
+    def anim_graph_ready(self) -> bool:
+        return bool(self._anim_graph_ready)
+
     def sim_start_stop(self, event):
         """
         Callback that is called every time there is a timeline event such as starting/stoping the simulation.
@@ -195,11 +237,11 @@ class Person:
             return
 
         # If the start/stop button was pressed, then call the start and stop methods accordingly
-        if self._world.is_playing() and self._sim_running == False:
+        if self._world.is_playing() and not self._sim_running:
             self._sim_running = True
             self.start()
 
-        if self._world.is_stopped() and self._sim_running == True:
+        if self._world.is_stopped() and self._sim_running:
             self._sim_running = False
             self.stop()
 
@@ -242,17 +284,185 @@ class Person:
         if self._anim_motion_state != "walk":
             self._set_anim_variable("Action", "Walk")
             self._anim_motion_state = "walk"
-        self._set_anim_variable(
-            "PathPoints",
-            [
-                carb.Float3(float(self._state.position[0]), float(self._state.position[1]), float(self._state.position[2])),
-                carb.Float3(float(active_goal[0]), float(active_goal[1]), float(active_goal[2])),
-            ],
-        )
         speed = float(self._target_speed)
         if self._last_walk_speed is None or abs(float(self._last_walk_speed) - speed) > 1e-4:
             self._set_anim_variable("Walk", speed)
             self._last_walk_speed = speed
+
+    def _attach_behavior_script(self) -> bool:
+        """Attach Isaac 4.5's supported People behavior controller."""
+        skel_root = self.character_skel_root
+        if skel_root is None or not skel_root.IsValid():
+            return False
+        try:
+            omni.kit.commands.execute(
+                "ApplyScriptingAPICommand",
+                paths=[Sdf.Path(skel_root.GetPrimPath())],
+            )
+            script_path = BehaviorScriptPaths.behavior_script_path()
+            skel_root.GetAttribute("omni:scripting:scripts").Set([str(script_path)])
+            carb.log_info(
+                f"People behavior script attached to {self._stage_prefix}: {script_path}"
+            )
+            return True
+        except Exception as exc:
+            self._warn_pose_read_throttled(
+                f"Failed to attach People behavior script to {self._stage_prefix}: {exc}"
+            )
+            return False
+
+    def _behavior_agent(self):
+        if not self._behavior_script_enabled:
+            return None, None
+        manager = AgentManager.get_instance()
+        names = (
+            self._requested_stage_name,
+            str(self._stage_prefix).rstrip("/").split("/")[-1],
+        )
+        registered = getattr(manager, "_agent_name_to_script_inst", {})
+        for name in names:
+            agent = registered.get(name)
+            if agent is not None:
+                return name, agent
+        return None, None
+
+    def _dispatch_behavior_commands_if_ready(self) -> bool:
+        if self._dispatched_command_generation == self._motion_command_generation:
+            _, agent = self._behavior_agent()
+            if (
+                agent is not None
+                and self._motion_state == "executing"
+                and getattr(agent, "current_command", None) is None
+                and not getattr(agent, "commands", [])
+            ):
+                self._motion_state = "succeeded"
+            return True
+        agent_name, agent = self._behavior_agent()
+        if agent is None:
+            return False
+        commands = []
+        if len(self._target_position) > 0:
+            coordinates = " ".join(
+                f"{float(point[0]):.9f} {float(point[1]):.9f} {float(point[2]):.9f}"
+                for point in self._target_position
+            )
+            rotation = "_" if self._target_yaw is None else f"{math.degrees(float(self._target_yaw)):.9f}"
+            # A single multi-point GoTo keeps the People controller walking
+            # continuously instead of stopping and restarting at every A* bend.
+            commands.append(f"{agent_name} GoTo {coordinates} {rotation}")
+        try:
+            current_command = getattr(agent, "current_command", None)
+            if current_command is not None:
+                # Keep only the currently executing entry. The official script
+                # removes it after force_quit, then continues with the newly
+                # injected commands at index 1.
+                agent.commands = list(getattr(agent, "commands", []))[:1]
+                agent.end_current_command()
+            else:
+                agent.commands = []
+            if commands:
+                agent.inject_command(commands, executeImmediately=True)
+            self._dispatched_command_generation = self._motion_command_generation
+            self._motion_state = "executing" if commands else "idle"
+            carb.log_info(
+                f"People command generation {self._motion_command_generation} dispatched to "
+                f"{agent_name}: commands={len(commands)}, waypoints={len(self._target_position)}"
+            )
+            return True
+        except Exception as exc:
+            self._warn_pose_read_throttled(
+                f"Failed to dispatch People commands for {self._stage_prefix}: {exc}"
+            )
+            return False
+
+    def _animation_graph_prim(self):
+        return self._current_stage.GetPrimAtPath(
+            Person.character_root_prim_path
+            + "/Biped_Setup/CharacterAnimation/AnimationGraph"
+        )
+
+    def _sync_animation_graph_instance_variables(self, animation_graph) -> bool:
+        """Materialize graph variables on a runtime-spawned character.
+
+        Isaac 4.5's VariablesService skips USD notices while the timeline is
+        playing.  Runtime-spawned characters therefore need the same variable
+        synchronization performed explicitly before the graph is used.
+        """
+        skel_root = self.character_skel_root
+        if skel_root is None or not skel_root.IsValid():
+            return False
+
+        graph_variables = {}
+        for graph_attr in animation_graph.GetAttributes():
+            attr_name = graph_attr.GetName()
+            if not attr_name.startswith(Person.anim_graph_variable_prefix):
+                continue
+            graph_variables[attr_name] = graph_attr
+
+        required_names = {
+            Person.anim_graph_variable_prefix + name
+            for name in Person.required_anim_graph_variables
+        }
+        if not required_names.issubset(graph_variables):
+            missing = sorted(required_names.difference(graph_variables))
+            self._warn_pose_read_throttled(
+                f"Biped AnimGraph is not fully loaded for {self._stage_prefix}; "
+                f"missing template variables={missing}"
+            )
+            return False
+
+        for attr_name, graph_attr in graph_variables.items():
+            graph_type = graph_attr.GetTypeName()
+            instance_attr = skel_root.GetAttribute(attr_name)
+            if instance_attr and instance_attr.IsValid() and instance_attr.GetTypeName() != graph_type:
+                skel_root.RemoveProperty(attr_name)
+                instance_attr = None
+            if not instance_attr or not instance_attr.IsValid():
+                instance_attr = skel_root.CreateAttribute(attr_name, graph_type)
+
+            graph_value = graph_attr.Get()
+            if graph_value is not None:
+                instance_attr.SetCustomDataByKey("default", graph_value)
+            elif graph_type == Sdf.ValueTypeNames.Float3Array:
+                instance_attr.Set(Vt.Vec3fArray())
+
+        return all(skel_root.HasAttribute(name) for name in required_names)
+
+    def _ensure_animation_graph_ready(self) -> bool:
+        if self._anim_graph_ready and self.character_graph is not None:
+            return True
+
+        now = time.monotonic()
+        if not self._anim_graph_setup_ok and now >= self._next_anim_graph_setup_attempt:
+            self._next_anim_graph_setup_attempt = now + 0.5
+            self._anim_graph_setup_ok = self.add_animation_graph_to_agent()
+        if not self._anim_graph_setup_ok:
+            return False
+
+        if self.character_graph is None:
+            self.character_graph = ag.get_character(self.character_skel_root_stage_path)
+        if self.character_graph is None:
+            self._warn_pose_read_throttled(
+                f"AnimGraph runtime is not ready for {self._stage_prefix}; cached movement will wait."
+            )
+            return False
+
+        skel_root = self.character_skel_root
+        required_names = [
+            Person.anim_graph_variable_prefix + name
+            for name in Person.required_anim_graph_variables
+        ]
+        if skel_root is None or not all(skel_root.HasAttribute(name) for name in required_names):
+            self._anim_graph_setup_ok = False
+            self.character_graph = None
+            return False
+
+        self._anim_graph_ready = True
+        carb.log_info(
+            f"AnimGraph ready for {self._stage_prefix}: "
+            f"variables={list(Person.required_anim_graph_variables)}"
+        )
+        return True
 
     def update(self, dt: float):
         """
@@ -265,10 +475,12 @@ class Person:
         if not self._active or not self._stage_prim_is_valid():
             return
 
-        # Note: this is done to avoid the error of the character_graph being None. The animation graph is only created after the simulation starts
-        if not self.character_graph or self.character_graph is None:
-            self.character_graph = ag.get_character(self.character_skel_root_stage_path)
-        if self.character_graph is None:
+        if not self._ensure_animation_graph_ready():
+            return
+
+        if self._behavior_script_enabled:
+            self._publish_robot_obstacles_to_people(dt)
+            self._dispatch_behavior_commands_if_ready()
             return
 
         # Call the controller update method that should update the reference of the target position
@@ -288,7 +500,7 @@ class Person:
         active_goal = self._target_position[index_point]
         distance_to_target_position = np.linalg.norm(active_goal - self._state.position)
 
-        if distance_to_target_position < 0.5:
+        if distance_to_target_position < self._path_point_arrival_radius:
             self._current_point_index += self._path_direction
             if self._current_point_index >= self._num_path_points:
                 if self._loop_path and self._num_path_points > 1:
@@ -320,7 +532,7 @@ class Person:
         # if self.character_skel_root_stage_path is not None:
         #     PeopleManager.get_people_manager().add_person(self.character_skel_root_stage_path, self)
 
-    def update_target_position(self, position, walk_speed=1.0, loop: bool = False):
+    def update_target_position(self, position, walk_speed=1.0, loop: bool = False, yaw=None):
         """
         Method that updates the target position of the person to which it will move towards.
 
@@ -350,7 +562,11 @@ class Person:
         self._path_direction = 1
         self._loop_path = bool(loop)
         self._target_speed = float(walk_speed)
+        self._target_yaw = None if yaw is None else float(yaw)
         self._last_walk_speed = None
+        self._motion_command_generation += 1
+        self._motion_state = "accepted"
+        return self._motion_command_generation
 
     def stop_motion(self):
         self._target_position = np.empty((0, 3), dtype=float)
@@ -359,14 +575,32 @@ class Person:
         self._path_direction = 1
         self._loop_path = False
         self._target_speed = 0.0
-        self._set_idle_animation()
+        self._target_yaw = None
+        self._motion_command_generation += 1
+        agent_name, agent = self._behavior_agent()
+        if agent is not None:
+            try:
+                if getattr(agent, "current_command", None) is not None:
+                    agent.commands = list(getattr(agent, "commands", []))[:1]
+                    agent.end_current_command()
+                else:
+                    agent.commands = []
+                self._dispatched_command_generation = self._motion_command_generation
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to stop People command for {agent_name}: {exc}"
+                )
+        else:
+            self._set_idle_animation()
+        self._motion_state = "idle"
 
     def dispose(self):
         """Deactivate callbacks before the USD prim is destroyed."""
         if not getattr(self, "_active", True):
             return
-        self._active = False
         self.stop_motion()
+        self._active = False
+        self._pose_valid = False
         for method_name, callback_name in (
             ("remove_physics_callback", getattr(self, "_state_callback_name", "")),
             ("remove_physics_callback", getattr(self, "_update_callback_name", "")),
@@ -385,6 +619,17 @@ class Person:
                 pass
             self._collision_proxy_path = None
         self.character_graph = None
+
+    def retire(self):
+        """Make a character disappear without destroying a live AnimGraph."""
+        if not getattr(self, "_active", True):
+            return
+        try:
+            if self.prim is not None and self.prim.IsValid():
+                UsdGeom.Imageable(self.prim).MakeInvisible()
+        except Exception:
+            pass
+        self.dispose()
 
     def set_direct_pose(self, position, yaw: float | None = None, *, stop: bool = True):
         pos = np.array(position, dtype=float).reshape(3)
@@ -471,6 +716,83 @@ class Person:
                 return None
         return position, orientation
 
+    @classmethod
+    def _get_static_voxel_guard(cls):
+        if cls._shared_static_voxel_guard is not None:
+            return cls._shared_static_voxel_guard
+        map_path = os.environ.get("ARENA_ISAAC_VOXEL_MAP_PATH", "").strip()
+        if not map_path:
+            return None
+        try:
+            diameter = 2.0 * float(cls.collision_proxy_radius)
+            cls._shared_static_voxel_guard = VoxelCollisionGuard(
+                robot_name="pedestrian_static_guard",
+                config=VoxelGuardConfig(
+                    enabled=True,
+                    map_path=map_path,
+                    length=diameter,
+                    width=diameter,
+                    margin=0.0,
+                    z_min=0.05,
+                    z_max=1.2,
+                    refresh_sec=1.0,
+                    log_sec=0.0,
+                    block_log_sec=2.0,
+                ),
+            )
+        except Exception as exc:
+            carb.log_warn(f"Pedestrian static voxel guard is unavailable: {exc}")
+            cls._shared_static_voxel_guard = None
+        return cls._shared_static_voxel_guard
+
+    def _static_pose_collides(self, position, orientation) -> tuple[bool, str | None]:
+        guard = self._static_voxel_guard
+        if guard is None:
+            return False, None
+        try:
+            guard.refresh()
+            if not guard.occupied_xy:
+                return False, None
+            radius = max(
+                0.05,
+                float(os.environ.get("ARENA_ISAAC_PEDESTRIAN_STATIC_GUARD_RADIUS_M", self.collision_proxy_radius)),
+            )
+            x, y = float(position[0]), float(position[1])
+            origin_x, origin_y, _ = guard.origin
+            hit = circle_intersects_grid_cells(
+                center_xy=(x, y),
+                radius=radius,
+                resolution=float(guard.resolution),
+                origin_xy=(origin_x, origin_y),
+                occupied=guard.occupied_xy,
+            )
+            return (False, None) if hit is None else (True, f"voxel:{hit[0]},{hit[1]}")
+        except Exception:
+            return False, None
+
+    def _is_terminal_semantic_approach(self, position) -> bool:
+        if self._motion_state != "executing" or len(self._target_position) == 0:
+            return self._motion_state != "executing"
+        final_target = np.array(self._target_position[-1], dtype=float)
+        return float(np.linalg.norm(final_target[:2] - np.array(position, dtype=float)[:2])) <= float(
+            self._path_point_arrival_radius
+        )
+
+    def _restore_previous_graph_pose(self) -> None:
+        if self.character_graph is None:
+            return
+        previous_pos = np.array(self._state.position, dtype=float)
+        previous_rot = np.array(self._state.orientation, dtype=float)
+        self.character_graph.set_world_transform(
+            carb.Float3(float(previous_pos[0]), float(previous_pos[1]), float(previous_pos[2])),
+            carb.Float4(
+                float(previous_rot[0]),
+                float(previous_rot[1]),
+                float(previous_rot[2]),
+                float(previous_rot[3]),
+            ),
+        )
+
     def _warn_pose_read_throttled(self, message: str):
         now = time.monotonic()
         if float(now) - float(self._last_pose_read_warn) >= 2.0:
@@ -489,23 +811,38 @@ class Person:
         if not self._active or not self._stage_prim_is_valid():
             return
 
-        # Note: this is done to avoid the error of the character_graph being None. The animation graph is only created after the simulation starts
-        if not self.character_graph or self.character_graph is None:
-            self.character_graph = ag.get_character(self.character_skel_root_stage_path)
+        self._ensure_animation_graph_ready()
 
         pose = self._read_character_graph_pose()
         if pose is None:
             pose = self._read_stage_root_pose()
         if pose is None:
+            self._pose_valid = False
             self._warn_pose_read_throttled(
                 f"Keeping previous pedestrian pose for {self._stage_prefix}; "
                 "AnimGraph/root transform was invalid or implausible."
             )
             return
 
+        collides, obstacle = self._static_pose_collides(pose[0], pose[1])
+        if collides and not self._is_terminal_semantic_approach(pose[0]):
+            try:
+                self._restore_previous_graph_pose()
+            except Exception:
+                pass
+            now = time.monotonic()
+            if now - self._last_static_guard_warn >= 2.0:
+                self._last_static_guard_warn = now
+                carb.log_warn(
+                    f"Blocked pedestrian root motion into {obstacle or 'voxel obstacle'} for {self._stage_prefix}."
+                )
+            return
+
         # Update the current state of the person only after validating the source pose.
         self._state.position = pose[0]
         self._state.orientation = pose[1]
+        self._pose_valid = True
+        self._last_valid_pose_time = time.monotonic()
         self._update_collision_proxy()
 
         # Signal the controller the updated state
@@ -527,7 +864,7 @@ class Person:
             return None
         index_point = int(self._current_point_index)
         active_goal = np.array(self._target_position[index_point], dtype=float)
-        if np.linalg.norm(active_goal - self._state.position) >= 0.5:
+        if np.linalg.norm(active_goal - self._state.position) >= self._path_point_arrival_radius:
             return active_goal
         index_point += int(self._path_direction)
         if index_point >= self._num_path_points:
@@ -593,6 +930,31 @@ class Person:
                 f"[dynamic_actor_guard] pedestrian {self._stage_prefix} paused for robot {blocked_by}"
             )
         return False
+
+    def _publish_robot_obstacles_to_people(self, dt: float) -> None:
+        """Expose bridge robots to the official People dynamic avoidance manager."""
+        try:
+            from isaac_utils.mecanum_teleop import mecanum_teleop_manager
+        except Exception:
+            return
+        manager = GlobalCharacterPositionManager.get_instance()
+        for robot in list(getattr(mecanum_teleop_manager, "robots", {}).values()):
+            getter = getattr(robot, "get_dynamic_guard_state", None)
+            if not callable(getter):
+                continue
+            state = getter(max(float(dt), 0.0))
+            if state is None:
+                continue
+            key = f"arena_robot:{state.name}"
+            current = carb.Float3(float(state.pos_xy[0]), float(state.pos_xy[1]), 0.0)
+            future = carb.Float3(float(state.next_pos_xy[0]), float(state.next_pos_xy[1]), 0.0)
+            radius = math.hypot(
+                max(float(state.forward), float(state.rear)),
+                max(float(state.left), float(state.right)),
+            )
+            manager.set_character_current_pos(key, current)
+            manager.set_character_future_pos(key, future)
+            manager.set_character_radius(key, max(radius, 0.1))
 
     def spawn_agent(self, usd_file, stage_name, init_pos, init_yaw):
 
@@ -668,7 +1030,7 @@ class Person:
         imageable.MakeInvisible()
         UsdPhysics.CollisionAPI.Apply(prim).CreateCollisionEnabledAttr(True).Set(True)
         try:
-            rb = UsdPhysics.RigidBodyAPI.Apply(prim)
+            UsdPhysics.RigidBodyAPI.Apply(prim)
             prim.CreateAttribute("physics:rigidBodyEnabled", Sdf.ValueTypeNames.Bool, custom=False).Set(True)
             prim.CreateAttribute("physics:kinematicEnabled", Sdf.ValueTypeNames.Bool, custom=False).Set(True)
             prim.CreateAttribute("physics:startsAsleep", Sdf.ValueTypeNames.Bool, custom=False).Set(False)
@@ -695,28 +1057,45 @@ class Person:
             Gf.Vec3d(float(pos[0]), float(pos[1]), float(pos[2] + Person.collision_proxy_center_z))
         )
 
-    def add_animation_graph_to_agent(self):
+    def add_animation_graph_to_agent(self) -> bool:
+        animation_graph = self._animation_graph_prim()
+        if animation_graph is None or not animation_graph.IsValid():
+            self._warn_pose_read_throttled(
+                f"Biped AnimGraph asset is not loaded for {self._stage_prefix}; setup will retry."
+            )
+            return False
+        if self.character_skel_root is None or not self.character_skel_root.IsValid():
+            self._warn_pose_read_throttled(
+                f"Character SkelRoot is invalid for {self._stage_prefix}; AnimGraph setup will retry."
+            )
+            return False
 
-        # Get the animation graph that we are going to add to the person
-        animation_graph = self._current_stage.GetPrimAtPath(
-            Person.character_root_prim_path
-            + "/Biped_Setup/CharacterAnimation/AnimationGraph"
-        )
-
-        # Remove the animation graph attribute if it exists
-        if self.character_skel_root is not None:
+        try:
             omni.kit.commands.execute(
                 "RemoveAnimationGraphAPICommand",
                 paths=[Sdf.Path(self.character_skel_root.GetPrimPath())],
             )
-
-        # Add the animation graph to the character
-        if self.character_skel_root is not None:
+            if not self._sync_animation_graph_instance_variables(animation_graph):
+                return False
             omni.kit.commands.execute(
                 "ApplyAnimationGraphAPICommand",
                 paths=[Sdf.Path(self.character_skel_root.GetPrimPath())],
                 animation_graph_path=Sdf.Path(animation_graph.GetPrimPath()),
             )
+            if not self._sync_animation_graph_instance_variables(animation_graph):
+                return False
+        except Exception as exc:
+            self._warn_pose_read_throttled(
+                f"AnimGraph setup failed for {self._stage_prefix}: {exc}"
+            )
+            return False
+
+        self.character_graph = None
+        self._anim_graph_ready = False
+        carb.log_info(
+            f"AnimGraph variables prepared for {self._stage_prefix}; waiting for runtime character."
+        )
+        return True
 
     @staticmethod
     def _transverse_prim(stage, stage_prefix):

@@ -1,5 +1,4 @@
 import carb
-import numpy as np
 import omni.timeline
 import omni.anim.navigation.core as nav
 from pedestrian.simulator.logic.people.person import Person
@@ -70,16 +69,19 @@ def move_pedestrian(request: MovePed.Request, response: MovePed.Response):
     except Exception:
         pass
 
+    accepted = True
     for nav_command in request.nav_list:
         nav_command: NavPed
         person = _find_person(nav_command.path)
         if not isinstance(person, Person):
             carb.log_error(f"Person not found for path/name: {nav_command.path}")
+            accepted = False
             continue
         carb.log_info(
             f"Resolved pedestrian command {nav_command.path}: "
             f"root={getattr(person, '_stage_prefix', '')}, "
-            f"skelroot={getattr(person, 'character_skel_root_stage_path', '')}"
+            f"skelroot={getattr(person, 'character_skel_root_stage_path', '')}, "
+            f"animgraph_ready={person.anim_graph_ready}"
         )
 
         direct_pose = _goal_or_none(getattr(nav_command, "direct_pose", None))
@@ -123,16 +125,20 @@ def move_pedestrian(request: MovePed.Request, response: MovePed.Response):
         if not path_points:
             path_points = navmesh_points or [goal]
 
-        person.update_target_position(
+        generation = person.update_target_position(
             path_points,
             velocity,
             loop=bool(getattr(nav_command, "loop_path", False)),
+            yaw=float(getattr(nav_command, "orientation", 0.0) or 0.0),
         )
         carb.log_info(
-            f"Move pedestrian {nav_command.path}: goal={goal}, velocity={velocity}, points={len(path_points)}"
+            f"Move pedestrian {nav_command.path}: goal={goal}, velocity={velocity}, "
+            f"points={len(path_points)}, "
+            f"command_generation={generation}, "
+            f"execution={'ready' if person.anim_graph_ready else 'pending_animgraph'}"
         )
 
-    response.ret = True
+    response.ret = bool(accepted)
     return response
 
 

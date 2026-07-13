@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Collection, Sequence
 
 
 @dataclass(frozen=True)
@@ -26,6 +26,39 @@ class PedestrianGuardState:
     pos_xy: tuple[float, float]
     next_pos_xy: tuple[float, float]
     radius: float
+
+
+def circle_intersects_grid_cells(
+    *,
+    center_xy: Sequence[float],
+    radius: float,
+    resolution: float,
+    origin_xy: Sequence[float],
+    occupied: Collection[tuple[int, int]],
+) -> tuple[int, int] | None:
+    """Return the first occupied grid square intersecting a circular footprint."""
+    x, y = float(center_xy[0]), float(center_xy[1])
+    radius = max(0.0, float(radius))
+    resolution = float(resolution)
+    origin_x, origin_y = float(origin_xy[0]), float(origin_xy[1])
+    ix0 = math.floor((x - radius - origin_x) / resolution)
+    ix1 = math.floor((x + radius - origin_x) / resolution)
+    iy0 = math.floor((y - radius - origin_y) / resolution)
+    iy1 = math.floor((y + radius - origin_y) / resolution)
+    radius_sq = radius * radius
+    for ix in range(ix0, ix1 + 1):
+        for iy in range(iy0, iy1 + 1):
+            if (ix, iy) not in occupied:
+                continue
+            cell_min_x = origin_x + ix * resolution
+            cell_max_x = cell_min_x + resolution
+            cell_min_y = origin_y + iy * resolution
+            cell_max_y = cell_min_y + resolution
+            nearest_x = min(max(x, cell_min_x), cell_max_x)
+            nearest_y = min(max(y, cell_min_y), cell_max_y)
+            if (x - nearest_x) ** 2 + (y - nearest_y) ** 2 <= radius_sq:
+                return ix, iy
+    return None
 
 
 def footprint_extents(

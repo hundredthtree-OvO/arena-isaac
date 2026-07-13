@@ -61,15 +61,25 @@ class PedestrianStatePublisher:
             position = getattr(state, "position", None)
             if position is None or len(position) < 3 or not _valid_position(position):
                 continue
+            pose_valid = bool(getattr(person, "_pose_valid", False))
             entry = PeoplePerson()
             entry.name = str(name)
             entry.position = Point(x=float(position[0]), y=float(position[1]), z=float(position[2]))
             entry.velocity = Point(x=0.0, y=0.0, z=0.0)
-            entry.reliability = 1.0
-            entry.tagnames = ["isaac", "pedestrian_state"]
+            entry.reliability = 1.0 if pose_valid else 0.0
+            entry.tagnames = [
+                "isaac",
+                "pedestrian_state",
+                "pose_valid",
+                "motion_state",
+                "command_generation",
+            ]
             entry.tags = [
                 str(getattr(person, "_stage_prefix", "") or ""),
                 str(getattr(person, "character_skel_root_stage_path", "") or ""),
+                "true" if pose_valid else "false",
+                str(getattr(person, "_motion_state", "unknown")),
+                str(getattr(person, "_motion_command_generation", 0)),
             ]
             msg.people.append(entry)
 

@@ -1,17 +1,45 @@
 import unittest
 
-from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
-    PedestrianGuardState,
-    RobotGuardState,
-    movement_allowed,
-    pedestrian_robot_scores,
-    predict_pedestrian_step,
-    predict_robot_pose,
-    robot_pedestrian_scores,
-)
+try:
+    from isaac_utils.dynamic_actor_guard import (
+        PedestrianGuardState,
+        RobotGuardState,
+        circle_intersects_grid_cells,
+        movement_allowed,
+        pedestrian_robot_scores,
+        predict_pedestrian_step,
+        predict_robot_pose,
+        robot_pedestrian_scores,
+    )
+except ImportError:
+    from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
+        PedestrianGuardState,
+        RobotGuardState,
+        circle_intersects_grid_cells,
+        movement_allowed,
+        pedestrian_robot_scores,
+        predict_pedestrian_step,
+        predict_robot_pose,
+        robot_pedestrian_scores,
+    )
 
 
 class TestDynamicActorGuard(unittest.TestCase):
+    def test_circle_grid_collision_is_not_orientation_dependent(self):
+        occupied = {(0, 0)}
+
+        self.assertEqual(
+            circle_intersects_grid_cells(
+                center_xy=(1.2, 0.5), radius=0.21, resolution=1.0, origin_xy=(0.0, 0.0), occupied=occupied
+            ),
+            (0, 0),
+        )
+        self.assertIsNone(
+            circle_intersects_grid_cells(
+                center_xy=(1.3, 0.5), radius=0.21, resolution=1.0, origin_xy=(0.0, 0.0), occupied=occupied
+            )
+        )
+
     def test_predict_pedestrian_step_moves_toward_goal(self):
         next_xy = predict_pedestrian_step(
             pos_xy=(0.0, 0.0),

@@ -97,7 +97,7 @@ class PeopleManager:
         PeopleManager._people.clear()
 
     @classmethod
-    def rebuild_nav_mesh(cls, height=1.5, radius=0.35, auto_rebake_on_changes=False, auto_rebake_delay_seconds=4, exclude_rigid_bodies=False, view_nav_mesh=False, dynamic_avoidance_enabled=True, navmesh_enabled=True):
+    def rebuild_nav_mesh(cls, height=1.5, radius=0.35, auto_rebake_on_changes=False, auto_rebake_delay_seconds=4, exclude_rigid_bodies=False, view_nav_mesh=False, dynamic_avoidance_enabled=True, navmesh_enabled=False):
         """
         Rebuild the navmesh with the correct settings. Used for the people to move around.
         Called only when the sim with people is requested.

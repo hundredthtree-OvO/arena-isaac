@@ -61,6 +61,7 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     guard = profile.get("guard", {})
     collision2d = profile.get("collision2d", {})
     voxel = profile.get("voxel", {})
+    pedestrians = profile.get("pedestrians", {})
     robot = profile.get("robot", {})
     robot_geometry = profile.get("robot_geometry", {})
     lidar = profile.get("lidar", {})
@@ -115,6 +116,8 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         env["ARENA_ISAAC_VOXEL_SKIP_KEYWORDS"] = ",".join(str(x) for x in voxel.get("skip_keywords", []))
     if voxel.get("include_keywords"):
         env["ARENA_ISAAC_VOXEL_INCLUDE_KEYWORDS"] = ",".join(str(x) for x in voxel.get("include_keywords", []))
+    if pedestrians.get("stop_radius_m") is not None:
+        env["ARENA_ISAAC_PEDESTRIAN_STOP_RADIUS_M"] = str(pedestrians.get("stop_radius_m"))
 
 
     # V16 robot geometry / lidar / actual odom-tf settings.  These are consumed
