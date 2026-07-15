@@ -130,10 +130,12 @@ def move_pedestrian(request: MovePed.Request, response: MovePed.Response):
             velocity,
             loop=bool(getattr(nav_command, "loop_path", False)),
             yaw=float(getattr(nav_command, "orientation", 0.0) or 0.0),
+            constrain_to_path=bool(getattr(nav_command, "constrain_to_path", False)),
         )
         carb.log_info(
             f"Move pedestrian {nav_command.path}: goal={goal}, velocity={velocity}, "
             f"points={len(path_points)}, "
+            f"constrain_to_path={bool(getattr(nav_command, 'constrain_to_path', False))}, "
             f"command_generation={generation}, "
             f"execution={'ready' if person.anim_graph_ready else 'pending_animgraph'}"
         )

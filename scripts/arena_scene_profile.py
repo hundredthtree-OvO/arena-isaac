@@ -118,6 +118,10 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         env["ARENA_ISAAC_VOXEL_INCLUDE_KEYWORDS"] = ",".join(str(x) for x in voxel.get("include_keywords", []))
     if pedestrians.get("stop_radius_m") is not None:
         env["ARENA_ISAAC_PEDESTRIAN_STOP_RADIUS_M"] = str(pedestrians.get("stop_radius_m"))
+    if pedestrians.get("constrained_waypoint_radius_m") is not None:
+        env["ARENA_ISAAC_CONSTRAINED_WAYPOINT_RADIUS_M"] = str(
+            pedestrians.get("constrained_waypoint_radius_m")
+        )
 
 
     # V16 robot geometry / lidar / actual odom-tf settings.  These are consumed

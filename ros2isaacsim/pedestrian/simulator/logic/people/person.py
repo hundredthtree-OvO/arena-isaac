@@ -32,10 +32,18 @@ except Exception:  # pragma: no cover
     from ros2isaacsim.isaac_utils.voxel_guard import VoxelCollisionGuard, VoxelGuardConfig
 from isaac_utils.utils.assets import get_assets_root_path_safe
 from isaac_utils.animgraph_people import normalize_stage_name
+from omni.anim.people.scripts.utils import Utils
 
 from omni.usd import get_stage_next_free_path
 from pedestrian.simulator.logic.people.person_controller import PersonController
 from pedestrian.simulator.logic.people_manager import PeopleManager
+from pedestrian.simulator.logic.people.navigation_safety import (
+    LateralAvoidanceCandidate,
+    path_target_progress_radius,
+    segment_is_safe,
+    select_safe_lateral_avoidance_choice,
+    terminal_semantic_approach_radius,
+)
 
 # Extension APIs
 from pedestrian.simulator.logic.state import State
@@ -65,6 +73,14 @@ def _pedestrian_stop_radius() -> float:
         value = float(os.environ.get("ARENA_ISAAC_PEDESTRIAN_STOP_RADIUS_M", "0.5"))
     except (TypeError, ValueError):
         value = 0.5
+    return max(0.01, value)
+
+
+def _constrained_waypoint_radius() -> float:
+    try:
+        value = float(os.environ.get("ARENA_ISAAC_CONSTRAINED_WAYPOINT_RADIUS_M", "0.08"))
+    except (TypeError, ValueError):
+        value = 0.08
     return max(0.01, value)
 
 
@@ -128,6 +144,9 @@ class Person:
         self._target_position = np.array(init_pos)
         self._target_speed = 0.0
         self._target_yaw = None
+        self._constrain_to_path = False
+        self._constrained_waypoint_radius = _constrained_waypoint_radius()
+        self._dynamic_avoidance_default = None
         self._path_point_arrival_radius = _pedestrian_stop_radius()
 
         # Set the transition point for the path points
@@ -186,6 +205,7 @@ class Person:
             self._backend.initialize(self)
 
         self._active = True
+        self._parked = False
         self._state_callback_name = self._stage_prefix + "/state"
         self._update_callback_name = self._stage_prefix + "/update"
         self._timeline_callback_name = self._stage_prefix + "/start_stop_sim"
@@ -204,6 +224,10 @@ class Person:
         self._spawn_collision_proxy()
         self._guard_escape_epsilon = 1e-4
         self._last_guard_block_log = 0.0
+        self._guard_blocked = False
+        self._guard_block_generation = 0
+        self._guard_block_count = 0
+        self._last_navigation_voxel_wait_log = 0.0
 
         # Add a callback to start/stop of the simulation once the play/stop button is hit
         self._world.add_timeline_callback(self._timeline_callback_name, self.sim_start_stop)
@@ -327,8 +351,10 @@ class Person:
         return None, None
 
     def _dispatch_behavior_commands_if_ready(self) -> bool:
+        agent_name, agent = self._behavior_agent()
+        if agent is not None:
+            self._apply_behavior_navigation_mode(agent)
         if self._dispatched_command_generation == self._motion_command_generation:
-            _, agent = self._behavior_agent()
             if (
                 agent is not None
                 and self._motion_state == "executing"
@@ -337,7 +363,6 @@ class Person:
             ):
                 self._motion_state = "succeeded"
             return True
-        agent_name, agent = self._behavior_agent()
         if agent is None:
             return False
         commands = []
@@ -374,6 +399,237 @@ class Person:
                 f"Failed to dispatch People commands for {self._stage_prefix}: {exc}"
             )
             return False
+
+    def _apply_behavior_navigation_mode(self, agent) -> None:
+        navigation_manager = getattr(agent, "navigation_manager", None)
+        if navigation_manager is None:
+            return
+        if self._dynamic_avoidance_default is None:
+            self._dynamic_avoidance_default = bool(
+                getattr(navigation_manager, "dynamic_avoidance_enabled", True)
+            )
+        navigation_manager.dynamic_avoidance_enabled = (
+            False if self._constrain_to_path else self._dynamic_avoidance_default
+        )
+        self._install_navigation_manager_voxel_safety(navigation_manager)
+
+    def _install_navigation_manager_voxel_safety(self, navigation_manager) -> None:
+        if navigation_manager is None or getattr(navigation_manager, "_arena_voxel_safety_wrapped", False):
+            return
+        original_update_path = getattr(navigation_manager, "update_path", None)
+        original_progress = getattr(navigation_manager, "update_target_path_progress", None)
+        if not callable(original_update_path) or not callable(original_progress):
+            return
+
+        def _update_target_path_progress_with_mode():
+            targets = getattr(navigation_manager, "path_targets", None)
+            if not targets or not self._constrain_to_path:
+                return original_progress()
+            radius = path_target_progress_radius(
+                target_count=len(targets),
+                constrain_to_path=True,
+                constrained_intermediate_radius=self._constrained_waypoint_radius,
+                default_intermediate_radius=float(Utils.CONFIG["MinDistanceToIntermediateTarget"]),
+                final_radius=float(Utils.CONFIG["MinDistanceToFinalTarget"]),
+            )
+            if navigation_manager.check_proximity_to_point(targets[0], radius):
+                targets.pop(0)
+
+        def _update_path_with_voxel_safety(*args, **kwargs):
+            try:
+                if self._constrain_to_path or not bool(getattr(navigation_manager, "dynamic_avoidance_enabled", True)):
+                    self._set_guard_block_state(False)
+                    return original_update_path(*args, **kwargs)
+                if bool(getattr(navigation_manager, "navmesh_enabled", False)):
+                    self._set_guard_block_state(False)
+                    return original_update_path(*args, **kwargs)
+                return self._update_navmesh_disabled_path_with_static_voxel_safety(navigation_manager)
+            except Exception as exc:  # pragma: no cover - vendor fallback
+                self._set_guard_block_state(False)
+                self._warn_pose_read_throttled(
+                    f"Falling back to Isaac NavigationManager.update_path for {self._stage_prefix}: {exc}"
+                )
+                return original_update_path(*args, **kwargs)
+
+        navigation_manager._arena_original_update_path = original_update_path
+        navigation_manager._arena_original_update_target_path_progress = original_progress
+        navigation_manager.update_target_path_progress = _update_target_path_progress_with_mode
+        navigation_manager.update_path = _update_path_with_voxel_safety
+        navigation_manager._arena_voxel_safety_wrapped = True
+
+    def _set_guard_block_state(self, blocked: bool, generation: int | None = None) -> None:
+        if blocked:
+            if generation is None:
+                generation = int(self._motion_command_generation)
+            if not self._guard_blocked:
+                self._guard_block_count = 0
+            self._guard_blocked = True
+            self._guard_block_generation = int(generation)
+            self._guard_block_count += 1
+            return
+        self._guard_blocked = False
+        self._guard_block_generation = 0
+        self._guard_block_count = 0
+
+    def _static_pose_check(self, position) -> tuple[bool, str | None]:
+        guard = self._static_voxel_guard
+        if guard is None:
+            return True, None
+        try:
+            guard.refresh()
+            if not guard.occupied_xy:
+                return True, None
+            radius = max(
+                0.05,
+                float(os.environ.get("ARENA_ISAAC_PEDESTRIAN_STATIC_GUARD_RADIUS_M", self.collision_proxy_radius)),
+            )
+            x, y = float(position[0]), float(position[1])
+            origin_x, origin_y, _ = guard.origin
+            hit = circle_intersects_grid_cells(
+                center_xy=(x, y),
+                radius=radius,
+                resolution=float(guard.resolution),
+                origin_xy=(origin_x, origin_y),
+                occupied=guard.occupied_xy,
+            )
+            return (hit is None, None if hit is None else f"voxel:{hit[0]},{hit[1]}")
+        except Exception:
+            return True, None
+
+    def _update_navmesh_disabled_path_with_static_voxel_safety(self, navigation_manager) -> None:
+        navigation_manager.update_target_path_progress()
+        if navigation_manager.destination_reached() or not navigation_manager.dynamic_avoidance_enabled:
+            self._set_guard_block_state(False)
+            return
+        if not navigation_manager.detect_collision():
+            self._set_guard_block_state(False)
+            return
+
+        collision_name = navigation_manager.collision_list[0]
+        current_pos = Utils.get_character_pos(navigation_manager.character)
+        self_current = navigation_manager.character_manager.get_character_current_pos(
+            navigation_manager.character_name
+        )
+        self_future = navigation_manager.character_manager.get_character_future_pos(
+            navigation_manager.character_name
+        )
+        obstacle_future = navigation_manager.character_manager.get_character_future_pos(collision_name)
+
+        movement = np.array(
+            [
+                float(self_future[0]) - float(self_current[0]),
+                float(self_future[1]) - float(self_current[1]),
+            ],
+            dtype=float,
+        )
+        movement_norm = float(np.linalg.norm(movement))
+        if movement_norm <= 1e-6:
+            self._set_guard_block_state(False)
+            return
+
+        diff = np.array(
+            [
+                float(obstacle_future[0]) - float(self_future[0]),
+                float(obstacle_future[1]) - float(self_future[1]),
+            ],
+            dtype=float,
+        )
+        diff_norm = float(np.linalg.norm(diff))
+        if diff_norm <= 1e-6:
+            self._set_guard_block_state(False)
+            return
+
+        right_vector = np.array([movement[1], -movement[0]], dtype=float) / movement_norm
+        direction_of_collision = float(np.dot(right_vector, diff / diff_norm))
+
+        radius_a = float(navigation_manager.character_manager.get_character_radius(navigation_manager.character_name))
+        radius_b = float(navigation_manager.character_manager.get_character_radius(collision_name))
+        if radius_a <= 1e-6:
+            self._set_guard_block_state(False)
+            return
+
+        avoid_angle = math.degrees(math.atan(max(0.0, radius_a + radius_b - diff_norm) / max(movement_norm, 1e-6)))
+        avoid_angle = max(0.0, min(60.0, (radius_b / radius_a) * avoid_angle))
+        relative = np.array(
+            [
+                float(self_future[0]) - float(current_pos[0]),
+                float(self_future[1]) - float(current_pos[1]),
+            ],
+            dtype=float,
+        )
+        c = math.cos(math.radians(avoid_angle))
+        s = math.sin(math.radians(avoid_angle))
+        left_offset = np.array(
+            [c * relative[0] - s * relative[1], s * relative[0] + c * relative[1]],
+            dtype=float,
+        )
+        right_offset = np.array(
+            [c * relative[0] + s * relative[1], -s * relative[0] + c * relative[1]],
+            dtype=float,
+        )
+        left_point = carb.Float3(
+            float(current_pos[0]) + float(left_offset[0]),
+            float(current_pos[1]) + float(left_offset[1]),
+            float(current_pos[2]),
+        )
+        right_point = carb.Float3(
+            float(current_pos[0]) + float(right_offset[0]),
+            float(current_pos[1]) + float(right_offset[1]),
+            float(current_pos[2]),
+        )
+        start_xy = (float(current_pos[0]), float(current_pos[1]))
+
+        def _segment_clear(candidate_point) -> tuple[bool, str | None]:
+            sample_step = max(0.5 * float(getattr(self._static_voxel_guard, "resolution", 0.05)), 0.01)
+
+            def _point_safe(point_xy: tuple[float, float]) -> bool:
+                safe, _ = self._static_pose_check((float(point_xy[0]), float(point_xy[1]), float(current_pos[2])))
+                return safe
+
+            safe = segment_is_safe(
+                start_xy=start_xy,
+                end_xy=(float(candidate_point[0]), float(candidate_point[1])),
+                is_safe_point=_point_safe,
+                sample_step=sample_step,
+            )
+            if safe:
+                return True, None
+            return False, self._static_pose_check(candidate_point)[1]
+
+        left_safe, left_obstacle = _segment_clear(left_point)
+        right_safe, right_obstacle = _segment_clear(right_point)
+        selected = select_safe_lateral_avoidance_choice(
+            direction_of_collision=direction_of_collision,
+            left=LateralAvoidanceCandidate(
+                "left",
+                (float(left_point[0]), float(left_point[1]), float(left_point[2])),
+                left_safe,
+            ),
+            right=LateralAvoidanceCandidate(
+                "right",
+                (float(right_point[0]), float(right_point[1]), float(right_point[2])),
+                right_safe,
+            ),
+        )
+        if selected is None:
+            self._set_guard_block_state(True)
+            if float(time.monotonic()) - float(self._last_navigation_voxel_wait_log) >= 0.5:
+                self._last_navigation_voxel_wait_log = float(time.monotonic())
+                blocked_obstacle = left_obstacle if not left_safe else right_obstacle if not right_safe else None
+                carb.log_warn(
+                    f"Waiting for safe lateral avoidance for {self._stage_prefix}; "
+                    f"static obstacle={blocked_obstacle or 'voxel'}"
+                )
+            return
+
+        self._set_guard_block_state(False)
+        new_target_list = list(getattr(navigation_manager, "path_targets", []))
+        new_target_list.insert(0, carb.Float3(*selected.point_xyz))
+        navigation_manager.generate_path(new_target_list)
+        try:
+            navigation_manager.path_points.insert(0, current_pos)
+        except Exception:
+            pass
 
     def _animation_graph_prim(self):
         return self._current_stage.GetPrimAtPath(
@@ -472,7 +728,7 @@ class Person:
             dt (float): The time elapsed between the previous and current function calls (s).
         """
 
-        if not self._active or not self._stage_prim_is_valid():
+        if not self._active or self._parked or not self._stage_prim_is_valid():
             return
 
         if not self._ensure_animation_graph_ready():
@@ -532,7 +788,14 @@ class Person:
         # if self.character_skel_root_stage_path is not None:
         #     PeopleManager.get_people_manager().add_person(self.character_skel_root_stage_path, self)
 
-    def update_target_position(self, position, walk_speed=1.0, loop: bool = False, yaw=None):
+    def update_target_position(
+        self,
+        position,
+        walk_speed=1.0,
+        loop: bool = False,
+        yaw=None,
+        constrain_to_path: bool = False,
+    ):
         """
         Method that updates the target position of the person to which it will move towards.
 
@@ -549,6 +812,9 @@ class Person:
             self._path_direction = 1
             self._loop_path = False
             self._target_speed = 0.0
+            self._target_yaw = None
+            self._constrain_to_path = False
+            self._set_guard_block_state(False)
             return
         if loop:
             current = np.array(self._state.position, dtype=float).reshape(1, 3)
@@ -563,6 +829,8 @@ class Person:
         self._loop_path = bool(loop)
         self._target_speed = float(walk_speed)
         self._target_yaw = None if yaw is None else float(yaw)
+        self._constrain_to_path = bool(constrain_to_path)
+        self._set_guard_block_state(False)
         self._last_walk_speed = None
         self._motion_command_generation += 1
         self._motion_state = "accepted"
@@ -576,10 +844,13 @@ class Person:
         self._loop_path = False
         self._target_speed = 0.0
         self._target_yaw = None
+        self._constrain_to_path = False
+        self._set_guard_block_state(False)
         self._motion_command_generation += 1
         agent_name, agent = self._behavior_agent()
         if agent is not None:
             try:
+                self._apply_behavior_navigation_mode(agent)
                 if getattr(agent, "current_command", None) is not None:
                     agent.commands = list(getattr(agent, "commands", []))[:1]
                     agent.end_current_command()
@@ -593,6 +864,52 @@ class Person:
         else:
             self._set_idle_animation()
         self._motion_state = "idle"
+
+    @property
+    def is_parked(self) -> bool:
+        return bool(self._parked)
+
+    def _set_collision_proxy_enabled(self, enabled: bool) -> None:
+        if not self._collision_proxy_path:
+            return
+        prim = self._current_stage.GetPrimAtPath(self._collision_proxy_path)
+        if prim is None or not prim.IsValid():
+            return
+        try:
+            UsdPhysics.CollisionAPI.Apply(prim).CreateCollisionEnabledAttr(True).Set(bool(enabled))
+        except Exception:
+            pass
+
+    def park(self, position) -> None:
+        """Hide an idle character without invalidating AnimGraph handles."""
+        if not self._active:
+            raise RuntimeError(f"Cannot park disposed pedestrian {self._stage_prefix}")
+        self.set_direct_pose(position, stop=True)
+        self._set_collision_proxy_enabled(False)
+        try:
+            if self.prim is not None and self.prim.IsValid():
+                UsdGeom.Imageable(self.prim).MakeInvisible()
+        except Exception:
+            pass
+        self._parked = True
+        self._pose_valid = False
+
+    def reactivate(self, position, yaw: float = 0.0) -> None:
+        """Reset and show a parked character while preserving its graph bindings."""
+        if not self._active:
+            raise RuntimeError(f"Cannot reactivate disposed pedestrian {self._stage_prefix}")
+        self.set_direct_pose(position, yaw=float(yaw), stop=True)
+        self._guard_blocked = False
+        self._guard_block_count = 0
+        self._last_walk_speed = None
+        try:
+            if self.prim is not None and self.prim.IsValid():
+                UsdGeom.Imageable(self.prim).MakeVisible()
+        except Exception:
+            pass
+        self._set_collision_proxy_enabled(True)
+        self._parked = False
+        self._pose_valid = False
 
     def dispose(self):
         """Deactivate callbacks before the USD prim is destroyed."""
@@ -635,12 +952,28 @@ class Person:
         pos = np.array(position, dtype=float).reshape(3)
         if yaw is None:
             yaw = float(Rotation.from_quat(self._state.orientation).as_euler("xyz")[2])
-        self._set_stage_root_pose(pos, float(yaw))
-        self._state.position = pos
-        self._state.orientation = Rotation.from_euler("z", float(yaw), degrees=False).as_quat()
-        self._update_collision_proxy()
         if stop:
             self.stop_motion()
+        orientation = Rotation.from_euler("z", float(yaw), degrees=False).as_quat()
+        self._set_stage_root_pose(pos, float(yaw))
+        if self.character_graph is not None:
+            try:
+                self.character_graph.set_world_transform(
+                    carb.Float3(float(pos[0]), float(pos[1]), float(pos[2])),
+                    carb.Float4(
+                        float(orientation[0]),
+                        float(orientation[1]),
+                        float(orientation[2]),
+                        float(orientation[3]),
+                    ),
+                )
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to synchronize direct AnimGraph pose for {self._stage_prefix}: {exc}"
+                )
+        self._state.position = pos
+        self._state.orientation = orientation
+        self._update_collision_proxy()
 
     def _set_stage_root_pose(self, position, yaw: float):
         if self.prim is None or not self.prim.IsValid():
@@ -746,52 +1079,19 @@ class Person:
         return cls._shared_static_voxel_guard
 
     def _static_pose_collides(self, position, orientation) -> tuple[bool, str | None]:
-        guard = self._static_voxel_guard
-        if guard is None:
-            return False, None
-        try:
-            guard.refresh()
-            if not guard.occupied_xy:
-                return False, None
-            radius = max(
-                0.05,
-                float(os.environ.get("ARENA_ISAAC_PEDESTRIAN_STATIC_GUARD_RADIUS_M", self.collision_proxy_radius)),
-            )
-            x, y = float(position[0]), float(position[1])
-            origin_x, origin_y, _ = guard.origin
-            hit = circle_intersects_grid_cells(
-                center_xy=(x, y),
-                radius=radius,
-                resolution=float(guard.resolution),
-                origin_xy=(origin_x, origin_y),
-                occupied=guard.occupied_xy,
-            )
-            return (False, None) if hit is None else (True, f"voxel:{hit[0]},{hit[1]}")
-        except Exception:
-            return False, None
+        safe, obstacle = self._static_pose_check(position)
+        return (not safe), obstacle
 
     def _is_terminal_semantic_approach(self, position) -> bool:
         if self._motion_state != "executing" or len(self._target_position) == 0:
             return self._motion_state != "executing"
         final_target = np.array(self._target_position[-1], dtype=float)
-        return float(np.linalg.norm(final_target[:2] - np.array(position, dtype=float)[:2])) <= float(
-            self._path_point_arrival_radius
+        acceptance_radius = terminal_semantic_approach_radius(
+            constrain_to_path=self._constrain_to_path,
+            default_radius=self._path_point_arrival_radius,
+            final_radius=float(Utils.CONFIG["MinDistanceToFinalTarget"]),
         )
-
-    def _restore_previous_graph_pose(self) -> None:
-        if self.character_graph is None:
-            return
-        previous_pos = np.array(self._state.position, dtype=float)
-        previous_rot = np.array(self._state.orientation, dtype=float)
-        self.character_graph.set_world_transform(
-            carb.Float3(float(previous_pos[0]), float(previous_pos[1]), float(previous_pos[2])),
-            carb.Float4(
-                float(previous_rot[0]),
-                float(previous_rot[1]),
-                float(previous_rot[2]),
-                float(previous_rot[3]),
-            ),
-        )
+        return float(np.linalg.norm(final_target[:2] - np.array(position, dtype=float)[:2])) <= acceptance_radius
 
     def _warn_pose_read_throttled(self, message: str):
         now = time.monotonic()
@@ -808,7 +1108,7 @@ class Person:
             dt (float): The time elapsed between the previous and current function calls (s).
         """
 
-        if not self._active or not self._stage_prim_is_valid():
+        if not self._active or self._parked or not self._stage_prim_is_valid():
             return
 
         self._ensure_animation_graph_ready()
@@ -826,10 +1126,7 @@ class Person:
 
         collides, obstacle = self._static_pose_collides(pose[0], pose[1])
         if collides and not self._is_terminal_semantic_approach(pose[0]):
-            try:
-                self._restore_previous_graph_pose()
-            except Exception:
-                pass
+            self._set_guard_block_state(True)
             now = time.monotonic()
             if now - self._last_static_guard_warn >= 2.0:
                 self._last_static_guard_warn = now
@@ -839,6 +1136,7 @@ class Person:
             return
 
         # Update the current state of the person only after validating the source pose.
+        self._set_guard_block_state(False)
         self._state.position = pose[0]
         self._state.orientation = pose[1]
         self._pose_valid = True

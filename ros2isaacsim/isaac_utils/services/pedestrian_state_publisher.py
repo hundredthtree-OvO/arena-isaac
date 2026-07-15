@@ -13,7 +13,12 @@ except Exception:  # pragma: no cover - optional runtime dependency
     People = None
     PeoplePerson = None
 
-from .pedestrian_state_utils import iter_unique_people
+from .pedestrian_state_utils import (
+    iter_unique_people,
+    pedestrian_state_publishable,
+    pedestrian_state_tags,
+    pedestrian_state_tagnames,
+)
 
 
 def _valid_position(position) -> bool:
@@ -55,32 +60,19 @@ class PedestrianStatePublisher:
 
         manager = PeopleManager.get_people_manager()
         for name, person in iter_unique_people(getattr(manager, "people", {}) or {}):
-            if not bool(getattr(person, "_active", True)):
+            if not pedestrian_state_publishable(person):
                 continue
             state = getattr(person, "_state", None)
             position = getattr(state, "position", None)
             if position is None or len(position) < 3 or not _valid_position(position):
                 continue
-            pose_valid = bool(getattr(person, "_pose_valid", False))
             entry = PeoplePerson()
             entry.name = str(name)
             entry.position = Point(x=float(position[0]), y=float(position[1]), z=float(position[2]))
             entry.velocity = Point(x=0.0, y=0.0, z=0.0)
-            entry.reliability = 1.0 if pose_valid else 0.0
-            entry.tagnames = [
-                "isaac",
-                "pedestrian_state",
-                "pose_valid",
-                "motion_state",
-                "command_generation",
-            ]
-            entry.tags = [
-                str(getattr(person, "_stage_prefix", "") or ""),
-                str(getattr(person, "character_skel_root_stage_path", "") or ""),
-                "true" if pose_valid else "false",
-                str(getattr(person, "_motion_state", "unknown")),
-                str(getattr(person, "_motion_command_generation", 0)),
-            ]
+            entry.reliability = 1.0 if bool(getattr(person, "_pose_valid", False)) else 0.0
+            entry.tagnames = list(pedestrian_state_tagnames())
+            entry.tags = pedestrian_state_tags(person)
             msg.people.append(entry)
 
         self._publisher.publish(msg)

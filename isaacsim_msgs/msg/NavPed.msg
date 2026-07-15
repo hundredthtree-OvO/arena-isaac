@@ -7,3 +7,4 @@ bool use_direct_pose
 float32[3] direct_pose
 float32 orientation
 bool stop
+bool constrain_to_path

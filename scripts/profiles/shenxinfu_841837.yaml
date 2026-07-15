@@ -225,7 +225,7 @@ gamepad:
   cmd_vel_topic: /cmd_vel_gamepad_diff
   linear_axis: 1
   angular_axis: 0
-  enable_button: 4
+  enable_button: 0
   linear_scale: 0.2
   angular_scale: 0.5
   deadzone: 0.1
@@ -236,6 +236,8 @@ pedestrians:
   # Radius at which the bridge switches to the next AnimGraph path point.
   # Keep this aligned with toilet_benchmark.director.actor_stop_radius_m while tuning.
   stop_radius_m: 0.5
+  # Tight portal/recovery paths must reach bends before turning in narrow doorways.
+  constrained_waypoint_radius_m: 0.08
   auto_sample: true
   voxel_map_path: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.voxel.json.gz
   count: 2
