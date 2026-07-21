@@ -50,6 +50,10 @@ class TestPhysxDiffProfile(unittest.TestCase):
         cmd, env = profile_module.bridge_cmd(self.profile, "physx_diff_contact")
         joined = " ".join(cmd)
         self.assertIn("enable_kinematic_collision_guard:=false", joined)
+        self.assertIn("enable_people_stack:=true", joined)
+        self.assertIn("enable_character_services:=true", joined)
+        self.assertIn("people_extension_mode:=replicator_agent_core", joined)
+        self.assertIn("enable_navmesh:=false", joined)
         self.assertEqual(env["ARENA_ISAAC_COLLISION_GUARD_BACKEND"], "none")
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"], "restore_selected_meshes")
         self.assertEqual(

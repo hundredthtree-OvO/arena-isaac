@@ -1,18 +1,24 @@
-# arena-isaac：Stage-1 PhysX wheels navigation path
+# arena-isaac：PhysX differential contact navigation
 
-当前推荐目标：在 v17 的稳定导航链路上，增加 **PhysX wheels** 底盘执行模式。它不追求真实麦轮 roller 接触，而是通过 PhysX articulation + 4 个主轮关节速度目标驱动整机，并保留场景碰撞响应与 ROS 接口兼容。
+后续开发主链路为 **`physx_diff_contact`**：四个轮关节由 PhysX articulation
+驱动，机器人运动来自轮地接触和纵向/侧向轮胎力，不直接写 root pose，也不使用
+voxel guard 代替底层碰撞。该链路同时启用 RTX LiDAR、People/AnimGraph 服务和
+`toilet_benchmark` 行人事件编排。
+
+原 **`physx_wheels` + `rtx_scan`** 链路继续保留，作为稳定兼容和回归对照，不再是
+后续轮地物理开发的主链路。
 
 ## 1. 当前设计
 
 控制链：
 
 ```text
-键鼠 /cmd_vel                  -> 麦轮 vx/vy/wz 映射
+键鼠 /cmd_vel                  -> 使用 vx/wz，忽略 vy
 手柄 /cmd_vel_gamepad_diff     -> 差速 vx/wz 映射（vy 强制为 0）
   -> 同时运行时按住手柄 deadman 优先
   -> velocity smoother / acceleration limiter
-  -> voxel guard 上层安全过滤
-  -> wheel joint velocity targets + root motion
+  -> 4 个 wheel joint velocity targets
+  -> PhysX contact + longitudinal/lateral tire force
   -> actual /odom + odom->base_link TF
 ```
 
@@ -25,25 +31,30 @@
 /front_scan
 /rear_scan
 /cmd_vel_applied
-voxel guard
 manual LiDAR mount: front_x=0.30, rear_x=-0.30, z=0.20
+/isaac/spawn_pedestrian
+/isaac/move_pedestrians
+/isaac/pedestrian_states
 ```
 
 关键变化：
 
 ```text
-v17 kinematic：直接写 USD root pose。
-stage1 physx_wheels：写 4 个主轮关节速度，期望由 PhysX articulation 积分和处理接触。
+physx_diff_contact：真实读取 articulation 状态，以轮速目标、轮地接触和轮胎力驱动。
+physx_wheels：保留 voxel guard 和旧 root-motion 辅助，作为回退基线。
 ```
 
 ## 2. 重要说明
 
-`voxel guard` 仍然保留，但定位变为上层安全过滤：
+`physx_diff_contact` 中 `voxel guard` 默认关闭：
 
 ```text
 PhysX CollisionAPI：底层接触、阻挡、防穿模。
-voxel guard：提前阻止危险速度、提供可解释 blocked 日志、后续融合 dynamic actor guard。
+轮胎力模型：分别限制纵向牵引力和侧向力，使差速转向可控。
+场景修复：只恢复 profile 白名单内门体和门框的碰撞。
 ```
+
+`physx_wheels` 回退模式仍启用 voxel guard，用于和旧导航表现对照。
 
 机器人仍保留 semantic footprint：
 
@@ -77,7 +88,9 @@ source install/setup.bash
 
 ## 4. 启动
 
-终端 1：bridge（主链路：RTX scan）
+### 主链路：physx_diff_contact
+
+终端 1：bridge（PhysX contact + RTX LiDAR + People services）
 
 ```bash
 cd ~/resources/arena_ws
@@ -85,12 +98,12 @@ source /opt/ros/humble/setup.bash
 . arena.bash
 source install/setup.bash
 cd ~/resources/arena_ws/src/arena/arena-isaac
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge rtx_scan
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge physx_diff_contact
 ```
 
 `scripts/profiles/shenxinfu_841837.yaml` 里的 `lidar.range_offset_m` 会写入自定义 RTX lidar profile 的 `rangeOffset` 参数，可用于减轻近场自遮挡。
 
-终端 2：spawn
+终端 2：按 contact profile 生成机器人
 
 ```bash
 cd ~/resources/arena_ws
@@ -98,26 +111,49 @@ source /opt/ros/humble/setup.bash
 . arena.bash
 source install/setup.bash
 cd ~/resources/arena_ws/src/arena/arena-isaac
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml spawn
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml spawn --phase physx_diff_contact
 ```
 
-终端 3A：键鼠麦轮控制
+终端 3A：差速手柄控制（推荐）
+
+```bash
+cd ~/resources/arena_ws/src/arena/arena-isaac
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml gamepad --phase physx_diff_contact
+```
+
+终端 3B：键鼠控制（可选）
 
 ```bash
 cd ~/resources/arena_ws/src/arena/arena-isaac
 python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml teleop
 ```
 
-键鼠窗口需要获得焦点。`W/S` 前后、`A/D` 横移、`Q/E` 旋转；控制器继续按麦轮公式处理 `/cmd_vel`。
+`physx_diff_contact` 是差速模式，只使用前后速度 `vx` 和角速度 `wz`；横移
+`vy` 不参与执行。键鼠窗口需获得焦点，使用 `W/S` 前后、`Q/E` 转向。
 
-终端 3B：手柄差速控制
+终端 4：厕所行人 benchmark（可选，等待 bridge 完全启动后运行）
 
 ```bash
-cd ~/resources/arena_ws/src/arena/arena-isaac
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml gamepad
+cd ~/resources/arena_ws
+source /opt/ros/humble/setup.bash
+. arena.bash
+source install/setup.bash
+ros2 run toilet_benchmark toilet_director_node --initial-agents 2
 ```
 
-该命令同时启动 ROS `joy_node` 和 `gamepad_diff_teleop`。默认左摇杆纵轴控制 `vx`、横轴控制 `wz`，按住 LB（默认 button 4）才发送命令；控制器根据 `0.345 m` 轮距执行差速公式，且始终令 `vy=0`。
+该命令复用现有 entrance -> urinal -> service -> exit -> recycle 事件流。
+`physx_diff_contact` phase 已启用 `replicator_agent_core`、Character services 和
+行人状态 topic，但保持 `enable_navmesh: false`，不会改变 toilet benchmark 的现有规划逻辑。
+
+终端 5：RViz（可选）
+
+```bash
+rviz2 --ros-args -p use_sim_time:=true
+```
+
+### 手柄说明
+
+`gamepad` 命令同时启动 ROS `joy_node` 和 `gamepad_diff_teleop`。默认左摇杆纵轴控制 `vx`、横轴控制 `wz`，按住 LB（默认 button 4）才发送命令；控制器根据 `0.345 m` 轮距执行差速公式，且始终令 `vy=0`。
 
 操作方式：
 
@@ -135,21 +171,14 @@ ros2 topic echo /joy
 
 然后修改 `scripts/profiles/shenxinfu_841837.yaml` 中的 `gamepad.linear_axis`、`angular_axis` 和 `enable_button`。
 
-终端 4：pedestrians（可选）
+### physx_wheels 兼容回退
+
+需要对照旧 voxel guard 行为时，bridge 和 spawn 分别改为：
 
 ```bash
-cd ~/resources/arena_ws
-source /opt/ros/humble/setup.bash
-. arena.bash
-source install/setup.bash
 cd ~/resources/arena_ws/src/arena/arena-isaac
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml pedestrians
-```
-
-RViz：
-
-```bash
-rviz2 --ros-args -p use_sim_time:=true
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge rtx_scan
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml spawn
 ```
 
 ### Synthetic laser 回退链路
@@ -180,55 +209,69 @@ python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_8418
 
 ## 5. Profile 关键参数
 
-当前默认：
+后续主链路的模式参数位于
+`scripts/profiles/modes/physx_diff_contact.yaml`，核心配置为：
 
 ```yaml
+runtime:
+  enable_guard: false
+  guard_backend: none
+
 robot:
-  model: mecanum730_xms5_lidar_physx_wheels
+  model: mecanum730_xms5_lidar_physx_diff_contact
+  x: -4.4
+  y: -1.0
+  z: 0.03
 
 motion:
-  smoothing_enabled: true
-  max_linear_accel: 0.4
-  max_lateral_accel: 0.4
-  max_angular_accel: 0.8
-  max_linear_decel: 0.8
-  max_lateral_decel: 0.8
-  max_angular_decel: 1.2
-
-physx_root_velocity:
-  height_kp: 8.0
-  height_max_vel: 0.35
-  upright_kp: 10.0
-  upright_max_ang_vel: 1.5
-  fallback_kinematic: true
+  wheel_radius: 0.08
+  tire_force_enabled: true
+  tire_longitudinal_stiffness: 60.0
+  tire_lateral_stiffness: 20.0
 ```
 
-回退到 v17 直接 kinematic：
+主 profile 中对应 phase 还负责启用行人服务：
 
 ```yaml
-robot:
-  model: mecanum730_xms5_lidar_kinematic
+phases:
+  physx_diff_contact:
+    enable_people_stack: true
+    enable_character_services: true
+    people_extension_mode: replicator_agent_core
+    enable_navmesh: false
+    lidar_backend: rtx
 ```
 
 ## 6. 验证
 
-确认 spawn 使用 PhysX 模式：
+确认主链路命令组合正确：
 
 ```bash
-python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml --dry-run spawn
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml --dry-run bridge physx_diff_contact
+python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml --dry-run spawn --phase physx_diff_contact
 ```
 
 应看到：
 
 ```text
---robot-model mecanum730_xms5_lidar_physx_wheels
+--robot-model mecanum730_xms5_lidar_physx_diff_contact
+enable_kinematic_collision_guard:=false
+enable_people_stack:=true
+enable_character_services:=true
+people_extension_mode:=replicator_agent_core
 ```
 
 bridge 日志应出现：
 
 ```text
-mecanum controller initialized: mode=physx_wheels
-collision_guard initialized: backend=voxel
+mecanum controller initialized: mode=physx_diff_contact
+```
+
+确认行人接口：
+
+```bash
+ros2 service list | grep -E 'spawn_pedestrian|move_pedestrians'
+ros2 topic list | grep pedestrian
 ```
 
 方案①静态地图检查：
@@ -269,12 +312,13 @@ ros2 run tf2_ros tf2_echo odom base_link
 ros2 topic echo /cmd_vel_applied
 ```
 
-如果撞墙或 guard 阻挡，`/cmd_vel_applied` 应被裁剪或置零。
+`physx_diff_contact` 不通过 voxel guard 裁剪墙前速度；碰撞阻挡应由 PhysX
+接触产生，并反映在实际 `/odom` 与轮地诊断中。
 
-检查 PhysX wheels 是否真正生效：
+检查 contact backend 是否真正生效：
 
 ```text
-mecanum controller initialized: mode=physx_wheels
+mecanum controller initialized: mode=physx_diff_contact
 ```
 
 ## 7. 本分支修改点
@@ -308,18 +352,14 @@ scripts/profiles/shenxinfu_841837.yaml
 
 ## 8. 下一步
 
-先不要合并动态行人。建议先单独验证：
+`physx_diff_contact` 已接入 RTX LiDAR 和 toilet benchmark 行人链路。后续功能、
+碰撞修复和社会导航集成均以该模式为主；`physx_wheels` 只作为回归基线保留。
+
+当前重点：
 
 ```text
-1. PhysX wheels 是否真生效，且不再依赖 root velocity fallback。
-2. 机器人是否稳定，不跳、不倒、不穿地。
-3. 撞墙时 PhysX 是否阻挡，/odom 是否不再继续穿墙漂移。
-4. voxel guard 是否仍能提前 blocked。
-5. acceleration limiter 是否让速度缓慢变化。
-```
-
-通过后，再进入：
-
-```text
-v19 animated pedestrians + semantic capsule + dynamic actor guard
+1. 持续校准轮胎力、地面摩擦和实际差速响应。
+2. 验证机器人、门、隔板及卫浴设施的 PhysX 碰撞完整性。
+3. 在同一主链路上验证 RTX scan、实际 odom/TF 和 toilet benchmark。
+4. 后续再评估 HuNav 或其他社会运动层，不改写 toilet director 的事件职责。
 ```

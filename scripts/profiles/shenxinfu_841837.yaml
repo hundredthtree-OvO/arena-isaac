@@ -344,8 +344,9 @@ phases:
     auto_write_config: false
     enable_scene_collision_repair: true
     overlap_policy: escape
-    enable_people_stack: false
-    enable_character_services: false
+    enable_people_stack: true
+    enable_character_services: true
+    people_extension_mode: replicator_agent_core
     enable_navmesh: false
     lidar_backend: rtx
     update_rate: 10.0
