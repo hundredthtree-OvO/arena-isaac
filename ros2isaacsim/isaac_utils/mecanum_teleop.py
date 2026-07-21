@@ -56,6 +56,7 @@ from ros2isaacsim.drive_kinematics import (
 )
 from ros2isaacsim.actual_motion_state import ActualMotionStateEstimator
 from ros2isaacsim.motion_backends import motion_backend_for_mode
+from ros2isaacsim.transform_math import child_relative_to_parent
 from ros2isaacsim.physx_diff_contact import (
     PhysxDiffContactDrive,
     articulation_link_wrench_arrays,
@@ -567,8 +568,7 @@ def _sensor_tf_from_stage_or_env(
             cache = UsdGeom.XformCache(Usd.TimeCode.Default())
             base_world = cache.GetLocalToWorldTransform(base)
             sensor_world = cache.GetLocalToWorldTransform(sensor)
-            base_inv = base_world.GetInverse()
-            sensor_local = base_inv * sensor_world
+            sensor_local = child_relative_to_parent(base_world, sensor_world)
             p = sensor_local.Transform(Gf.Vec3d(0.0, 0.0, 0.0))
             quat_wxyz = _quat_from_matrix_wxyz(sensor_local)
             if logger is not None:
