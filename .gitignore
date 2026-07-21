@@ -18,6 +18,8 @@ checkpoint.py
 
 # robot and scene
 *.urdf
+!ros2isaacsim/ros2isaacsim/assets/robots/physx_diff_contact/
+!ros2isaacsim/ros2isaacsim/assets/robots/physx_diff_contact/*.urdf
 *.usd
 *.usda
 *.stl

@@ -1,0 +1,860 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="mecanum730_xms5_physx_diff_contact">
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0" />
+  </material>
+  <material name="blue">
+    <color rgba="0.0 0.0 0.8 1.0" />
+  </material>
+  <material name="green">
+    <color rgba="0.0 0.8 0.0 1.0" />
+  </material>
+  <material name="grey">
+    <color rgba="0.2 0.2 0.2 1.0" />
+  </material>
+  <material name="orange">
+    <color rgba="1.0 0.423529411765 0.0392156862745 1.0" />
+  </material>
+  <material name="brown">
+    <color rgba="0.870588235294 0.811764705882 0.764705882353 1.0" />
+  </material>
+  <material name="red">
+    <color rgba="0.8 0.0 0.0 1.0" />
+  </material>
+  <material name="white">
+    <color rgba="1.0 1.0 1.0 1.0" />
+  </material>
+  <material name="Beige">
+    <color rgba="1.0 0.784 0.5765 1.0" />
+  </material>
+  <link name="base_footprint" />
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0.05" rpy="0 0 0" />
+      <mass value="50" />
+      <inertia ixx="0.5" ixy="0" ixz="0" iyy="0.5" iyz="0" izz="0.8" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/base_link_visual_103b6c94.stl" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="base_link_joint" type="fixed">
+    <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+    <parent link="base_footprint" />
+    <child link="base_link" />
+    <axis xyz="0 0 0" />
+  </joint>
+  <link name="wheel_fl_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="2" />
+      <inertia ixx="0.0064" ixy="0" ixz="0" iyy="0.00361667" iyz="0" izz="0.00361667" />
+    </inertial>
+    <visual>
+      <origin xyz="1.19209335241e-09 -2.38418549595e-09 -3.21865090136e-09" rpy="0 0 2.02815925832e-07" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/wheel_left_core_0a287477.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <link name="wheel_fr_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="2" />
+      <inertia ixx="0.0064" ixy="0" ixz="0" iyy="0.00361667" iyz="0" izz="0.00361667" />
+    </inertial>
+    <visual>
+      <origin xyz="-1.19209238531e-09 -2.3841859795e-09 -3.21865090136e-09" rpy="0 0 -3.14159245077" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/wheel_right_core_30505d37.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <link name="wheel_rl_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="2" />
+      <inertia ixx="0.0064" ixy="0" ixz="0" iyy="0.00361667" iyz="0" izz="0.00361667" />
+    </inertial>
+    <visual>
+      <origin xyz="1.19209238531e-09 2.3841859795e-09 -3.21865090136e-09" rpy="0 0 2.02815925832e-07" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/wheel_right_core_30505d37.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <link name="wheel_rr_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="2" />
+      <inertia ixx="0.0064" ixy="0" ixz="0" iyy="0.00361667" iyz="0" izz="0.00361667" />
+    </inertial>
+    <visual>
+      <origin xyz="-1.19209335241e-09 2.38418549595e-09 -3.21865090136e-09" rpy="0 0 -3.14159245077" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/wheel_left_core_0a287477.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_joint" type="continuous">
+    <origin xyz="0.157499998808 0.172499999404 0.0780000016093" rpy="0 0 1.57079632679" />
+    <parent link="base_link" />
+    <child link="wheel_fl_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.05" friction="0" />
+  </joint>
+  <link name="wheel_fl_roller_1_link">
+    <inertial>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_1_joint" type="fixed">
+    <origin xyz="-9.6803910668e-09 0.0536076439917 -0.0258160861731" rpy="0.785398163352 0.448798931081 1.57079657403" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_1_link" />
+  </joint>
+  <link name="wheel_fl_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_2_joint" type="fixed">
+    <origin xyz="1.32596412201e-08 -0.0595000037551 -3.21865093839e-09" rpy="-2.35619454875 -3.8938610003e-08 -1.57079614011" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_2_link" />
+  </joint>
+  <link name="wheel_fl_roller_3_link">
+    <inertial>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_3_joint" type="fixed">
+    <origin xyz="-1.49318858624e-09 0.0132399931923 0.0580082093775" rpy="0.785398204827 -1.34639681424 1.57079644538" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_3_link" />
+  </joint>
+  <link name="wheel_fl_roller_4_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_4_joint" type="fixed">
+    <origin xyz="-9.68039105142e-09 0.0536076439917 0.0258160797358" rpy="0.785398163352 -0.448798931081 1.5707964852" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_4_link" />
+  </joint>
+  <link name="wheel_fl_roller_5_link">
+    <inertial>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_5_joint" type="fixed">
+    <origin xyz="-1.4931886071e-09 0.0132399931923 -0.0580082158148" rpy="0.785397820847 1.3463968278 1.57079615821" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_5_link" />
+  </joint>
+  <link name="wheel_fl_roller_6_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_6_joint" type="fixed">
+    <origin xyz="8.71608642071e-09 -0.037097646445 0.0465189707875" rpy="-2.35619451067 -0.897597904715 -1.57079610033" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_6_link" />
+  </joint>
+  <link name="wheel_fl_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fl_roller_7_joint" type="fixed">
+    <origin xyz="8.7160864375e-09 -0.037097646445 -0.0465189772248" rpy="-2.35619451067 0.897597904715 -1.57079614763" />
+    <parent link="wheel_fl_link" />
+    <child link="wheel_fl_roller_7_link" />
+  </joint>
+  <joint name="wheel_fr_joint" type="continuous">
+    <origin xyz="0.157499998808 -0.172499999404 0.0780000016093" rpy="0 0 1.57079615821" />
+    <parent link="base_link" />
+    <child link="wheel_fr_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.05" friction="0" />
+  </joint>
+  <link name="wheel_fr_roller_1_link">
+    <inertial>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_1_joint" type="fixed">
+    <origin xyz="1.49318970817e-09 -0.0132399979606 0.0580082093775" rpy="-0.785397820847 -1.3463968278 -1.57079649538" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_1_link" />
+  </joint>
+  <link name="wheel_fr_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_2_joint" type="fixed">
+    <origin xyz="-1.32596410959e-08 0.0594999989867 -3.21865101174e-09" rpy="2.35619454875 3.89386099475e-08 1.57079651348" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_2_link" />
+  </joint>
+  <link name="wheel_fr_roller_3_link">
+    <inertial>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_3_joint" type="fixed">
+    <origin xyz="1.49318976368e-09 -0.0132399979606 -0.0580082158148" rpy="-0.785398204827 1.34639681424 -1.5707962082" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_3_link" />
+  </joint>
+  <link name="wheel_fr_roller_4_link">
+    <inertial>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_4_joint" type="fixed">
+    <origin xyz="-8.7160860499e-09 0.0370976416767 0.0465189707875" rpy="2.35619451067 -0.897597904715 1.57079650596" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_4_link" />
+  </joint>
+  <link name="wheel_fr_roller_5_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_5_joint" type="fixed">
+    <origin xyz="9.68039275237e-09 -0.0536076487601 -0.0258160861731" rpy="-0.785398163352 0.448798931081 -1.57079616839" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_5_link" />
+  </joint>
+  <link name="wheel_fr_roller_6_link">
+    <inertial>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_6_joint" type="fixed">
+    <origin xyz="9.68039275237e-09 -0.0536076487601 0.0258160797358" rpy="-0.785398163352 -0.448798931081 -1.57079607956" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_6_link" />
+  </joint>
+  <link name="wheel_fr_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_fr_roller_7_joint" type="fixed">
+    <origin xyz="-8.71608593887e-09 0.0370976416767 -0.0465189772248" rpy="2.35619451067 0.897597904715 1.57079655326" />
+    <parent link="wheel_fr_link" />
+    <child link="wheel_fr_roller_7_link" />
+  </joint>
+  <joint name="wheel_rl_joint" type="continuous">
+    <origin xyz="-0.157499998808 0.172499999404 0.0780000016093" rpy="0 0 1.57079632679" />
+    <parent link="base_link" />
+    <child link="wheel_rl_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.05" friction="0" />
+  </joint>
+  <link name="wheel_rl_roller_1_link">
+    <inertial>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407706062e-09 5.64839108256e-10 -5.64838511644e-10" rpy="-3.1417787578e-08 1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_1_joint" type="fixed">
+    <origin xyz="-1.49318952002e-09 0.0132399979606 0.0580082093775" rpy="-0.785397820847 -1.3463968278 1.57079615821" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_1_link" />
+  </joint>
+  <link name="wheel_rl_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="-4.64407248943e-08 2.68262712404e-08 1.11118059631e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_2_joint" type="fixed">
+    <origin xyz="1.32596402503e-08 -0.0594999989867 -3.21865101174e-09" rpy="2.35619454875 3.8938610003e-08 -1.57079614011" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_2_link" />
+  </joint>
+  <link name="wheel_rl_roller_3_link">
+    <inertial>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.5540767908e-09 -5.64839196153e-10 5.64839168465e-10" rpy="-2.82145470241e-08 9.174667614e-09 2.59333406787e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_3_joint" type="fixed">
+    <origin xyz="-1.49318957553e-09 0.0132399979606 -0.0580082158148" rpy="-0.785398204827 1.34639681424 1.57079644538" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_3_link" />
+  </joint>
+  <link name="wheel_rl_roller_4_link">
+    <inertial>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141409e-09 2.35301697203e-10 -2.35301689909e-10" rpy="1.05598597191e-08 -1.09752224453e-08 -1.19812009782e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_4_joint" type="fixed">
+    <origin xyz="8.71608552271e-09 -0.0370976416767 0.0465189707875" rpy="2.35619451067 -0.897597904715 -1.57079614763" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_4_link" />
+  </joint>
+  <link name="wheel_rl_roller_5_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 1.38344305897e-09" rpy="-8.03549950581e-09 -1.1290118082e-08 2.28174297688e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_5_joint" type="fixed">
+    <origin xyz="-9.68039199056e-09 0.0536076487601 -0.0258160861731" rpy="-0.785398163352 0.448798931081 1.5707964852" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_5_link" />
+  </joint>
+  <link name="wheel_rl_roller_6_link">
+    <inertial>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434028349e-09 1.38344266929e-09 -1.38344287858e-09" rpy="-1.53691521485e-08 2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_6_joint" type="fixed">
+    <origin xyz="-9.68039199056e-09 0.0536076487601 0.0258160797358" rpy="-0.785398163352 -0.448798931081 1.57079657403" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_6_link" />
+  </joint>
+  <link name="wheel_rl_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 2.35301874001e-10" rpy="-3.39624089255e-09 -6.87529897286e-09 1.40920670805e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rl_roller_7_joint" type="fixed">
+    <origin xyz="8.71608541168e-09 -0.0370976416767 -0.0465189772248" rpy="2.35619451067 0.897597904715 -1.57079610033" />
+    <parent link="wheel_rl_link" />
+    <child link="wheel_rl_roller_7_link" />
+  </joint>
+  <joint name="wheel_rr_joint" type="continuous">
+    <origin xyz="-0.157499998808 -0.172499999404 0.0780000016093" rpy="0 0 1.57079615821" />
+    <parent link="base_link" />
+    <child link="wheel_rr_link" />
+    <axis xyz="1 0 0" />
+    <dynamics damping="0.05" friction="0" />
+  </joint>
+  <link name="wheel_rr_roller_1_link">
+    <inertial>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434006144e-09 1.38344266929e-09 1.38344287858e-09" rpy="1.53691485957e-08 -2.81924612278e-08 -6.12561026293e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_1_joint" type="fixed">
+    <origin xyz="9.68039182861e-09 -0.0536076439917 -0.0258160861731" rpy="0.785398163352 0.448798931081 -1.57079607956" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_1_link" />
+  </joint>
+  <link name="wheel_rr_roller_2_link">
+    <inertial>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.741813665e-09 0 0" rpy="4.64407213416e-08 -2.68262712404e-08 1.11118041867e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_2_joint" type="fixed">
+    <origin xyz="-1.32596420656e-08 0.0595000037551 -3.21865093839e-09" rpy="-2.35619454875 -3.89386099475e-08 1.57079651348" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_2_link" />
+  </joint>
+  <link name="wheel_rr_roller_3_link">
+    <inertial>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407701284e-09 -5.64839140642e-10 -5.64839112954e-10" rpy="2.82145452478e-08 -9.17466672582e-09 2.59333389024e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_3_joint" type="fixed">
+    <origin xyz="1.49318877439e-09 -0.0132399931923 0.0580082093775" rpy="0.785398204827 -1.34639681424 -1.5707962082" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_3_link" />
+  </joint>
+  <link name="wheel_rr_roller_4_link">
+    <inertial>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="1.86434003165e-09 -1.38344297315e-09 -1.38344305897e-09" rpy="8.03549506492e-09 1.12901189702e-08 2.28174279924e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_4_joint" type="fixed">
+    <origin xyz="9.68039181323e-09 -0.0536076439917 0.0258160797358" rpy="0.785398163352 -0.448798931081 -1.57079616839" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_4_link" />
+  </joint>
+  <link name="wheel_rr_roller_5_link">
+    <inertial>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-3.55407683858e-09 5.64839219278e-10 5.64838622666e-10" rpy="3.14177840252e-08 -1.13666273607e-07 -6.4186922453e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_5_joint" type="fixed">
+    <origin xyz="1.49318879525e-09 -0.0132399931923 -0.0580082158148" rpy="0.785397820847 1.3463968278 -1.57079649538" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_5_link" />
+  </joint>
+  <link name="wheel_rr_roller_6_link">
+    <inertial>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013141779e-09 -2.3530192084e-10 -2.35301874001e-10" rpy="3.39623822802e-09 6.87529941695e-09 1.40920661923e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_6_joint" type="fixed">
+    <origin xyz="-8.7160869479e-09 0.037097646445 0.0465189707875" rpy="-2.35619451067 -0.897597904715 1.57079655326" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_6_link" />
+  </joint>
+  <link name="wheel_rr_roller_7_link">
+    <inertial>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <mass value="0.0500000007451" />
+      <inertia ixx="2.64593750644e-05" ixy="0" ixz="0" iyy="2.68716299356e-05" iyz="7.63831799661e-10" izz="6.109085e-06" />
+    </inertial>
+    <visual>
+      <origin xyz="-2.31013119205e-09 2.35301919247e-10 2.35301911954e-10" rpy="-1.05598623837e-08 1.09752233335e-08 -1.19812018664e-08" />
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/roller_3d13a999.stl" scale="0.5 0.5 0.5" />
+      </geometry>
+    </visual>
+  </link>
+  <joint name="wheel_rr_roller_7_joint" type="fixed">
+    <origin xyz="-8.71608696469e-09 0.037097646445 -0.0465189772248" rpy="-2.35619451067 0.897597904715 1.57079650596" />
+    <parent link="wheel_rr_link" />
+    <child link="wheel_rr_roller_7_link" />
+  </joint>
+  <link name="XMS5-R800-W4G3B4C_base">
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/XMS5_R800_W4G3B4C_base_17f15e31.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="3.167" />
+      <inertia ixx="0.03116799" ixy="-0.00000065" ixz="-0.00000427" iyy="0.03071271" iyz="-0.00223656" izz="0.00587740" />
+      <origin rpy="0 0 0" xyz="1.1e-05 -0.007992 0.23584200000000002" />
+    </inertial>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link1">
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/XMS5_R800_W4G3B4C_link1_2e1e2718.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="3.167" />
+      <inertia ixx="0.03116799" ixy="-0.00000065" ixz="-0.00000427" iyy="0.03071271" iyz="-0.00223656" izz="0.00587740" />
+      <origin rpy="0 0 0" xyz="1.1e-05 -0.007992 0.23584200000000002" />
+    </inertial>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link2">
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/XMS5_R800_W4G3B4C_link2_2a31a60c.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="4.291" />
+      <inertia ixx="0.14042515" ixy="0.00039009" ixz="0.01494819" iyy="0.14040198" iyz="-0.00255277" izz="0.01264775" />
+      <origin rpy="0 0 0" xyz="0.016666 -0.069301 0.184671" />
+    </inertial>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link3">
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/XMS5_R800_W4G3B4C_link3_0f856b6d.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="2.018" />
+      <inertia ixx="0.02103842" ixy="-0.00048390" ixz="0.00402665" iyy="0.02167667" iyz="-0.00170490" izz="0.00429357" />
+      <origin rpy="0 0 0" xyz="0.0249 0.009986 0.08373900000000001" />
+    </inertial>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link4">
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/XMS5_R800_W4G3B4C_link4_06b140e8.stl" scale=".001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="2.005" />
+      <inertia ixx="0.01325119" ixy="0.00000061" ixz="0.00000278" iyy="0.01255684" iyz="-0.00115731" izz="0.00274485" />
+      <origin rpy="0 0 0" xyz="6.6e-05 -0.008515 -0.068865" />
+    </inertial>
+  </link>
+  <link name="XMS5-R800-W4G3B4C_link5">
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/XMS5_R800_W4G3B4C_link5_3930bf50.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="1.507" />
+      <inertia ixx="0.00503262" ixy="-0.00000608" ixz="-0.00000129" iyy="0.00261442" iyz="-0.00033165" izz="0.00394480" />
+      <origin rpy="0 0 0" xyz="3e-06 0.029172999999999998 0.007019" />
+    </inertial>
+  </link>
+  <link name="link6">
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/XMS5_R800_W4G3B4C_link6_0b86751c.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+      <material name="white" />
+    </visual>
+    <inertial>
+      <mass value="0.634" />
+      <inertia ixx="0.00099702" ixy="-0.00000138" ixz="0.00000090" iyy="0.00100253" iyz="0.00000158" izz="0.00044795" />
+      <origin rpy="0 0 0" xyz="7.3e-05 7.9e-05 -0.044853000000000004" />
+    </inertial>
+  </link>
+  <link name="tool_link">
+    <inertial>
+      <mass value="0.5" />
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001" />
+      <origin rpy="0 0 0" xyz="0 0 0.03" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/tool_base_link_4ebeaa2b.STL" />
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <material name="white" />
+    </visual>
+  </link>
+  <link name="gripper_link1">
+    <inertial>
+      <origin xyz="-0.000987023087834993 -0.0202765803817861 -0.000515654181221868" rpy="0 0 0" />
+      <mass value="0.0111674785585402" />
+      <inertia ixx="3.59413887395954E-06" ixy="7.30795147948182E-07" ixz="-9.29169888745042E-08" iyy="9.6873098954976E-07" iyz="1.39232553191891E-07" izz="3.87360206766314E-06" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/gripper_link1_64dcbb6f.STL" />
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <material name="white" />
+    </visual>
+  </link>
+  <link name="gripper_link2">
+    <inertial>
+      <origin xyz="-0.00325807421421745 -0.0225105854582519 0.000515651849944308" rpy="0 0 0" />
+      <mass value="0.0111675254646053" />
+      <inertia ixx="3.33685517783338E-06" ixy="-1.06924214339669E-06" ixz="-1.11681304052473E-07" iyy="1.22600241993798E-06" iyz="-1.24685551421068E-07" izz="3.87358794233445E-06" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="../unified_v25730/xms_mecanum_meshes/gripper_link2_273a9873.STL" />
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <material name="white" />
+    </visual>
+  </link>
+  <link name="tool_tip_link">
+    <visual>
+      <geometry>
+        <sphere radius="0.001" />
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 0.5" />
+      </material>
+    </visual>
+  </link>
+  <joint name="joint1" type="fixed">
+    <parent link="XMS5-R800-W4G3B4C_base" />
+    <child link="XMS5-R800-W4G3B4C_link1" />
+    <origin rpy="0 -0 -0.04719" xyz="0.0 0.0 0.328" />
+  </joint>
+  <joint name="joint2" type="fixed">
+    <parent link="XMS5-R800-W4G3B4C_link1" />
+    <child link="XMS5-R800-W4G3B4C_link2" />
+    <origin rpy="1.57079997695 -1.44565165359 3.14158538714" xyz="0.0 0.0 0.0" />
+  </joint>
+  <joint name="joint3" type="fixed">
+    <parent link="XMS5-R800-W4G3B4C_link2" />
+    <child link="XMS5-R800-W4G3B4C_link3" />
+    <origin rpy="3.14159260598 2.46039377382e-08 1.923441" xyz="0.403113 0.0 0.0" />
+  </joint>
+  <joint name="joint4" type="fixed">
+    <parent link="XMS5-R800-W4G3B4C_link3" />
+    <child link="XMS5-R800-W4G3B4C_link4" />
+    <origin rpy="-1.5708000091 -0.0702999999995 2.58652553951e-07" xyz="-0.05 0.4 0.0" />
+  </joint>
+  <joint name="joint5" type="fixed">
+    <parent link="XMS5-R800-W4G3B4C_link4" />
+    <child link="XMS5-R800-W4G3B4C_link5" />
+    <origin rpy="-1.57080087798 0.631592653585 3.14158996643" xyz="0.0 0.136 0.0" />
+  </joint>
+  <joint name="joint6" type="fixed">
+    <parent link="XMS5-R800-W4G3B4C_link5" />
+    <child link="link6" />
+    <origin rpy="1.57081813951 1.40159265355 -3.14157115238" xyz="0.0 0.1035 0.0" />
+  </joint>
+  <joint name="joint_tool_fixed" type="fixed">
+    <parent link="link6" />
+    <child link="tool_link" />
+    <origin xyz="0 0 0.03" rpy="0 0 0" />
+  </joint>
+  <joint name="gripper_joint1" type="fixed">
+    <origin xyz="0.00043822 0.023057 0.44495" rpy="-1.5708 0.069988 1.5708" />
+    <parent link="tool_link" />
+    <child link="gripper_link1" />
+  </joint>
+  <joint name="gripper_joint2" type="fixed">
+    <origin xyz="-0.00056178 -0.021941 0.44256" rpy="-1.5708 0.069988 1.5708" />
+    <parent link="tool_link" />
+    <child link="gripper_link2" />
+  </joint>
+  <joint name="joint_tip" type="fixed">
+    <parent link="tool_link" />
+    <child link="tool_tip_link" />
+    <origin xyz="0 0 0.499" rpy="0 0 0" />
+  </joint>
+  <joint name="root_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="XMS5-R800-W4G3B4C_base" />
+    <origin xyz="0.17 -0.062 0.52" rpy="0 0 0" />
+  </joint>
+  <link name="base_scan_01">
+    </link>
+  <joint name="base_footprint2base_scan_01" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_scan_01" />
+    <origin xyz="0.2 0.13 0.208" rpy="3.14 0 0" />
+  </joint>
+  <link name="base_scan_02">
+    </link>
+  <joint name="base_footprint2base_scan_02" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_scan_02" />
+    <origin xyz="-0.2 -0.13 0.208" rpy="3.14 0 3.14" />
+  </joint>
+  <link name="base_imu_link">
+    </link>
+  <joint name="base_footprint2base_imu" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_imu_link" />
+    <origin xyz="0.0 0.0 0.346" rpy="3.14 0.0 0.0" />
+  </joint>
+</robot>

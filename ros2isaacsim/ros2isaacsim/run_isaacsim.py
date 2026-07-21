@@ -229,6 +229,8 @@ extensions.enable_extension("isaacsim.ros2.bridge")
 import rclpy
 import numpy as np
 from std_srvs.srv import Trigger
+from isaac_utils.origin_collision_probe import origin_collision_probe_service
+from isaac_utils.scene_collision_probe import scene_collision_probe_service
 
 # Optional people/navmesh/replicator imports.  Keep navigation and replicator out
 # of the default people path; both can affect RTX/SDG/render-product state.
@@ -732,6 +734,8 @@ def create_controller(time=120):
     spawn_door(controller)
     export_collision_proxies_service(controller)
     build_voxel_map_service(controller)
+    origin_collision_probe_service(controller)
+    scene_collision_probe_service(controller)
     # Let the DoorManager subscribe to ROS topics on this controller node
     try:
         door_manager.register_node(controller)

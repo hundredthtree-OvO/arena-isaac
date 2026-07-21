@@ -15,10 +15,14 @@ import isaac_utils.graphs.tf as tf
 import isaac_utils.utils.paths as Paths
 import omni.kit.commands as commands
 import omni.usd
-from pxr import Sdf, Usd, UsdGeom, UsdPhysics
+from pxr import Gf, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
 from isaac_utils.graphs import control
 from isaac_utils.mecanum_teleop import is_mecanum_model, mecanum_teleop_manager
 from isaac_utils.dual_lidar import create_dual_lidar, create_dual_lidar_mount_frames
+from ros2isaacsim.physx_diff_asset import (
+    PHYSX_DIFF_CONTACT_BASE_COLLIDER_SPECS as _PHYSX_DIFF_CONTACT_BASE_COLLIDER_SPECS,
+    PHYSX_DIFF_CONTACT_UPPER_BODY_COLLIDER_SPECS as _PHYSX_DIFF_CONTACT_UPPER_BODY_COLLIDER_SPECS,
+)
 try:
     from isaac_utils.robot_geometry import apply_auto_footprint_env
 except Exception:  # pragma: no cover
@@ -60,6 +64,15 @@ _NAV_GRIPPER_JOINT_NAMES = {
 _NAV_ROLLER_JOINT_KEYWORDS = (
     "roller",
 )
+
+_PHYSX_DIFF_WHEEL_LINKS = (
+    "wheel_fl_link",
+    "wheel_fr_link",
+    "wheel_rl_link",
+    "wheel_rr_link",
+)
+
+_PHYSX_DIFF_WHEEL_JOINTS = tuple(name.replace("_link", "_joint") for name in _PHYSX_DIFF_WHEEL_LINKS)
 
 
 def _safe_file_stem(name: str) -> str:
@@ -127,6 +140,12 @@ def _find_descendant_named(root_path: str, name: str) -> str:
     stage = omni.usd.get_context().get_stage()
     if stage is None or not name:
         return os.path.join(root_path, name)
+    return _find_descendant_named_on_stage(stage, root_path, name)
+
+
+def _find_descendant_named_on_stage(stage: Usd.Stage, root_path: str, name: str) -> str:
+    if stage is None or not name:
+        return os.path.join(root_path, name)
     root = stage.GetPrimAtPath(root_path)
     if not root or not root.IsValid():
         return os.path.join(root_path, name)
@@ -135,6 +154,72 @@ def _find_descendant_named(root_path: str, name: str) -> str:
         if prim.GetName() in target_names:
             return str(prim.GetPath())
     return os.path.join(root_path, name)
+
+
+def _collision_paths_under(root_prim) -> list[str]:
+    if not root_prim or not root_prim.IsValid():
+        return []
+    return [
+        str(prim.GetPath())
+        for prim in Usd.PrimRange(root_prim)
+        if prim.HasAPI(UsdPhysics.CollisionAPI)
+    ]
+
+
+def _collision_prototype_paths(stage: Usd.Stage) -> list[str]:
+    paths = []
+    for prototype in stage.GetPrototypes():
+        for prim in Usd.PrimRange(prototype):
+            if prim.HasAPI(UsdPhysics.CollisionAPI):
+                paths.append(str(prim.GetPath()))
+    return paths
+
+
+def _author_collision_primitive(stage: Usd.Stage, parent_path: str, spec: dict[str, typing.Any]) -> str | None:
+    link_prim = stage.GetPrimAtPath(parent_path)
+    if not link_prim or not link_prim.IsValid():
+        return None
+
+    collider_path = f"{parent_path}/{spec['name']}"
+    stage.RemovePrim(collider_path)
+
+    kind = spec["kind"]
+    if kind == "cube":
+        prim = UsdGeom.Cube.Define(stage, collider_path).GetPrim()
+        cube = UsdGeom.Cube(prim)
+        cube.CreateSizeAttr(1.0)
+        xform = UsdGeom.Xformable(prim)
+        xform.AddTranslateOp().Set(Gf.Vec3d(*spec["translate"]))
+        xform.AddScaleOp().Set(Gf.Vec3f(*spec["size"]))
+    elif kind == "capsule":
+        prim = UsdGeom.Capsule.Define(stage, collider_path).GetPrim()
+        capsule = UsdGeom.Capsule(prim)
+        capsule.CreateAxisAttr().Set(getattr(UsdGeom.Tokens, spec["axis"]))
+        capsule.CreateRadiusAttr(float(spec["radius"]))
+        capsule.CreateHeightAttr(float(spec["height"]))
+        xform = UsdGeom.Xformable(prim)
+        xform.AddTranslateOp().Set(Gf.Vec3d(*spec["translate"]))
+    else:
+        raise ValueError(f"unsupported PhysX collision primitive kind: {kind}")
+
+    prim = stage.GetPrimAtPath(collider_path)
+    if not prim or not prim.IsValid():
+        return None
+    UsdGeom.Imageable(prim).CreateVisibilityAttr().Set(UsdGeom.Tokens.invisible)
+    collision_api = UsdPhysics.CollisionAPI.Apply(prim)
+    collision_api.CreateCollisionEnabledAttr(True)
+    return collider_path
+
+
+def _expected_physx_diff_contact_collision_paths(stage: Usd.Stage, root_path: str) -> tuple[str, ...]:
+    paths = []
+    for link_name in _PHYSX_DIFF_WHEEL_LINKS:
+        link_path = _find_descendant_named_on_stage(stage, root_path, link_name)
+        paths.append(f"{link_path}/physx_diff_tire_collision")
+    for spec in _PHYSX_DIFF_CONTACT_BASE_COLLIDER_SPECS + _PHYSX_DIFF_CONTACT_UPPER_BODY_COLLIDER_SPECS:
+        link_path = _find_descendant_named_on_stage(stage, root_path, spec["link"])
+        paths.append(f"{link_path}/{spec['name']}")
+    return tuple(paths)
 
 
 def _find_articulation_root(root_path: str) -> str:
@@ -158,11 +243,130 @@ def _find_articulation_root(root_path: str) -> str:
     return root_path
 
 
+def _author_physx_diff_contact_colliders(
+    stage: Usd.Stage,
+    root_path: str,
+    robot_name: str,
+) -> bool:
+    """Author contact geometry explicitly after the Isaac 4.5 URDF import.
+
+    Isaac 4.5 can preserve the collision Xform names while dropping their
+    primitive geometry. These shapes are persisted into the imported asset
+    before it is referenced so PhysX discovers them with the articulation.
+    """
+    if stage is None:
+        return False
+
+    material_name = _usd_safe_identifier(f"{robot_name}_physx_diff_tire")
+    material = UsdShade.Material.Define(stage, f"{root_path}/PhysicsMaterials/{material_name}")
+    material_api = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+    static_friction = float(os.environ.get("ARENA_ISAAC_DIFF_WHEEL_STATIC_FRICTION", "0.25"))
+    dynamic_friction = float(os.environ.get("ARENA_ISAAC_DIFF_WHEEL_DYNAMIC_FRICTION", "0.20"))
+    friction_combine_mode = os.environ.get(
+        "ARENA_ISAAC_DIFF_WHEEL_FRICTION_COMBINE_MODE", "min"
+    ).strip().lower()
+    if friction_combine_mode not in {"average", "min", "multiply", "max"}:
+        raise ValueError(f"invalid PhysX friction combine mode: {friction_combine_mode}")
+    drive_damping = float(os.environ.get("ARENA_ISAAC_DIFF_WHEEL_DRIVE_DAMPING", "8.0"))
+    drive_max_force = float(os.environ.get("ARENA_ISAAC_DIFF_WHEEL_DRIVE_MAX_FORCE", "35.0"))
+    material_api.CreateStaticFrictionAttr().Set(static_friction)
+    material_api.CreateDynamicFrictionAttr().Set(dynamic_friction)
+    material_api.CreateRestitutionAttr().Set(0.0)
+    physx_material_api = PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim())
+    physx_material_api.CreateFrictionCombineModeAttr().Set(friction_combine_mode)
+
+    tire_paths = []
+    for link_name in _PHYSX_DIFF_WHEEL_LINKS:
+        link_path = _find_descendant_named_on_stage(stage, root_path, link_name)
+        link_prim = stage.GetPrimAtPath(link_path)
+        if not link_prim or not link_prim.IsValid():
+            print(f"[urdf_import] missing PhysX differential wheel link: {link_name}", file=sys.stderr)
+            return False
+        collider_path = f"{link_path}/physx_diff_tire_collision"
+        stage.RemovePrim(collider_path)
+        cylinder = UsdGeom.Cylinder.Define(stage, collider_path)
+        cylinder.CreateRadiusAttr(0.08)
+        cylinder.CreateHeightAttr(0.05)
+        cylinder.CreateAxisAttr(UsdGeom.Tokens.x)
+        cylinder.CreateVisibilityAttr(UsdGeom.Tokens.invisible)
+        collision_api = UsdPhysics.CollisionAPI.Apply(cylinder.GetPrim())
+        collision_api.CreateCollisionEnabledAttr(True)
+        binding = UsdShade.MaterialBindingAPI.Apply(cylinder.GetPrim())
+        binding.Bind(material, UsdShade.Tokens.weakerThanDescendants, "physics")
+        tire_paths.append(collider_path)
+
+    base_link_path = _find_descendant_named_on_stage(stage, root_path, "base_link")
+    base_link = stage.GetPrimAtPath(base_link_path)
+    if not base_link or not base_link.IsValid():
+        print("[urdf_import] missing base_link for PhysX differential chassis colliders", file=sys.stderr)
+        return False
+    chassis_paths = []
+    for spec in _PHYSX_DIFF_CONTACT_BASE_COLLIDER_SPECS:
+        collider_path = _author_collision_primitive(stage, _find_descendant_named_on_stage(stage, root_path, spec["link"]), spec)
+        if not collider_path:
+            print(f"[urdf_import] failed to author PhysX differential chassis collider: {spec['name']}", file=sys.stderr)
+            return False
+        chassis_paths.append(collider_path)
+
+    upper_body_paths = []
+    for spec in _PHYSX_DIFF_CONTACT_UPPER_BODY_COLLIDER_SPECS:
+        link_path = _find_descendant_named_on_stage(stage, root_path, spec["link"])
+        collider_path = _author_collision_primitive(stage, link_path, spec)
+        if not collider_path:
+            print(
+                f"[urdf_import] failed to author PhysX differential upper-body collider: {spec['name']} on {spec['link']}",
+                file=sys.stderr,
+            )
+            return False
+        upper_body_paths.append(collider_path)
+
+    valid_tires = sum(
+        1
+        for path in tire_paths
+        if stage.GetPrimAtPath(path).HasAPI(UsdPhysics.CollisionAPI)
+    )
+    valid_chassis = sum(
+        1
+        for path in chassis_paths
+        if stage.GetPrimAtPath(path).HasAPI(UsdPhysics.CollisionAPI)
+    )
+    valid_upper_body = sum(
+        1
+        for path in upper_body_paths
+        if stage.GetPrimAtPath(path).HasAPI(UsdPhysics.CollisionAPI)
+    )
+
+    configured_drives = 0
+    for joint_name in _PHYSX_DIFF_WHEEL_JOINTS:
+        joint_path = _find_descendant_named_on_stage(stage, root_path, joint_name)
+        joint_prim = stage.GetPrimAtPath(joint_path)
+        if not joint_prim or not joint_prim.IsValid() or not joint_prim.IsA(UsdPhysics.RevoluteJoint):
+            continue
+        drive = UsdPhysics.DriveAPI.Apply(joint_prim, "angular")
+        drive.CreateTypeAttr().Set("force")
+        drive.CreateStiffnessAttr().Set(0.0)
+        drive.CreateDampingAttr().Set(drive_damping)
+        drive.CreateMaxForceAttr().Set(drive_max_force)
+        drive.CreateTargetVelocityAttr().Set(0.0)
+        configured_drives += 1
+    print(
+        f"[urdf_import] authored PhysX differential contact geometry: "
+        f"tires={valid_tires}/4, chassis={valid_chassis}/2, "
+        f"upper_body={valid_upper_body}/{len(upper_body_paths)}, "
+        f"drives={configured_drives}/4, friction=({static_friction:.3f}, {dynamic_friction:.3f}), "
+        f"combine={friction_combine_mode}",
+        file=sys.stderr,
+    )
+    return valid_tires == 4 and valid_chassis == 2 and valid_upper_body == len(upper_body_paths) and configured_drives == 4
+
+
 
 
 
 def _mecanum_mode(robot_model: str) -> str:
     model = (robot_model or "").lower()
+    if "physx_diff_contact" in model:
+        return "physx_diff_contact"
     if "physx_wheels" in model:
         return "physx_wheels"
     if "physx_root_velocity" in model or model.endswith("_physx"):
@@ -618,7 +822,12 @@ def _prepare_urdf_for_isaac_import(urdf_path: str, robot_name: str) -> str:
     return str(out_path)
 
 
-def import_urdf(urdf_path: str, prim_path: str, robot_name: str = "robot") -> typing.Optional[str]:
+def import_urdf(
+    urdf_path: str,
+    prim_path: str,
+    robot_name: str = "robot",
+    author_physx_diff_contact: bool = False,
+) -> typing.Optional[str]:
     """Import URDF to a real .usd file, then reference that file at prim_path."""
 
     status, import_config = commands.execute("URDFCreateImportConfig")
@@ -679,6 +888,47 @@ def import_urdf(urdf_path: str, prim_path: str, robot_name: str = "robot") -> ty
         )
         return None
 
+    if author_physx_diff_contact:
+        asset_stage = Usd.Stage.Open(usd_path, Usd.Stage.LoadAll)
+        asset_root = asset_stage.GetDefaultPrim() if asset_stage else None
+        if not asset_root or not asset_root.IsValid():
+            print("[urdf_import] imported PhysX differential asset has no default prim", file=sys.stderr)
+            return None
+        imported_colliders = _collision_paths_under(asset_root)
+        imported_collision_prototypes = _collision_prototype_paths(asset_stage)
+        if imported_colliders or imported_collision_prototypes:
+            print(
+                "[urdf_import] refusing PhysX differential asset with importer-authored "
+                f"colliders={imported_colliders[:8]}, "
+                f"collision_prototypes={imported_collision_prototypes[:8]}",
+                file=sys.stderr,
+            )
+            return None
+        if not _author_physx_diff_contact_colliders(asset_stage, str(asset_root.GetPath()), robot_name):
+            print("[urdf_import] failed to author PhysX differential contact asset", file=sys.stderr)
+            return None
+        final_colliders = _collision_paths_under(asset_root)
+        final_collision_prototypes = _collision_prototype_paths(asset_stage)
+        expected_collision_paths = set(_expected_physx_diff_contact_collision_paths(asset_stage, str(asset_root.GetPath())))
+        final_collision_paths = set(final_colliders)
+        if final_collision_paths != expected_collision_paths or final_collision_prototypes:
+            missing_colliders = sorted(expected_collision_paths - final_collision_paths)
+            extra_colliders = sorted(final_collision_paths - expected_collision_paths)
+            print(
+                "[urdf_import] invalid PhysX differential contact asset after authoring: "
+                f"colliders={len(final_colliders)}/{len(expected_collision_paths)} "
+                f"missing={missing_colliders[:8]} extra={extra_colliders[:8]}, "
+                f"collision_prototypes={final_collision_prototypes[:8]}",
+                file=sys.stderr,
+            )
+            return None
+        asset_stage.GetRootLayer().Save()
+        print(
+            f"[urdf_import] persisted PhysX differential contact geometry in {usd_path}; "
+            f"colliders={len(final_colliders)}/{len(expected_collision_paths)}, collision_prototypes=0",
+            file=sys.stderr,
+        )
+
     print(
         f"[urdf_import] URDF importer returned {returned_usd_path}; "
         f"using layer file {usd_path}",
@@ -701,6 +951,7 @@ def urdf_to_usd(request, response):
 
     prim_path = Paths.scene.robot(name)
     mecanum_mode = _mecanum_mode(robot_model) if is_mecanum_model(robot_model) else ""
+    physical_contact_mecanum = is_mecanum_model(robot_model) and mecanum_mode == "physx_diff_contact"
     prebuilt_usd_path = _prebuilt_mecanum_usd_path(robot_model) if is_mecanum_model(robot_model) else None
     unified_asset = _unified_mecanum_asset_paths(urdf_path) if is_mecanum_model(robot_model) else None
     unified_urdf_path = None
@@ -723,7 +974,12 @@ def urdf_to_usd(request, response):
         usd_path = nav_usd_path
         print(f"[urdf_import] referenced prebuilt mecanum asset {usd_path} at {prim_path}", file=sys.stderr)
     else:
-        usd_path = import_urdf(urdf_path, prim_path, name)
+        usd_path = import_urdf(
+            urdf_path,
+            prim_path,
+            name,
+            author_physx_diff_contact=physical_contact_mecanum,
+        )
         if usd_path is None:
             return response
         if unified_usd_path is not None:
@@ -831,14 +1087,19 @@ def urdf_to_usd(request, response):
             print(f"[urdf_import] staged full handoff asset inactive at {handoff_root_path}", file=sys.stderr)
 
     stable_kinematic_mecanum = is_mecanum_model(robot_model) and mecanum_mode == "kinematic"
-    single_source_mecanum_tf = stable_kinematic_mecanum or prebuilt_physx_mecanum
+    single_source_mecanum_tf = stable_kinematic_mecanum or prebuilt_physx_mecanum or physical_contact_mecanum
     if single_source_mecanum_tf:
         # Both stable kinematic and physx_wheels runs use mecanum_teleop.py as
         # the single authoritative odom/tf source. Do not create Isaac ROS
         # bridge odom/tf/joint_state graphs that target a guessed base_link
         # path, because imported/reference assets can differ in hierarchy and
         # Isaac 4.5 may crash the graph when target prims are invalid.
-        reason = "stable kinematic mecanum" if stable_kinematic_mecanum else "prebuilt/unified physx mecanum"
+        if stable_kinematic_mecanum:
+            reason = "stable kinematic mecanum"
+        elif physical_contact_mecanum:
+            reason = "physical differential-contact mecanum"
+        else:
+            reason = "prebuilt/unified physx mecanum"
         print(
             f"[urdf_import] Skipping Isaac ROS bridge odom/tf/joint_states for {reason} {name}",
             file=sys.stderr,
@@ -895,7 +1156,12 @@ def urdf_to_usd(request, response):
             )
 
     if single_source_mecanum_tf:
-        reason = "stable kinematic mecanum" if stable_kinematic_mecanum else "prebuilt/unified physx mecanum"
+        if stable_kinematic_mecanum:
+            reason = "stable kinematic mecanum"
+        elif physical_contact_mecanum:
+            reason = "physical differential-contact mecanum"
+        else:
+            reason = "prebuilt/unified physx mecanum"
         print(f"[urdf_import] Skipping optional sensor graph setup for {reason} {name}", file=sys.stderr)
     else:
         try:

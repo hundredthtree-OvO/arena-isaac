@@ -1,0 +1,58 @@
+runtime:
+  enable_guard: false
+  guard_backend: none
+
+proxy:
+  # Restore only the three authored restroom doors. Frame meshes use SDF to
+  # preserve their openings; leaf meshes use convex hull contact.
+  door_collision_policy: restore_selected_meshes
+  door_collision_targets:
+  - Door_YS3UEUZVAJ2V4PTUKU888888_mdynP
+  - Door_YS2HVXZVALGD2PTUJQ888888_7qcYe
+  - Door_0000
+  door_collision_meshes:
+  - Door
+  - DoorFrame
+  - Door_Frame
+  - Static
+  - A06865e7a93064541911395c3271e1c34
+  door_leaf_approximation: convexHull
+  door_frame_approximation: sdf
+  door_frame_sdf_resolution: 512
+
+robot:
+  model: mecanum730_xms5_lidar_physx_diff_contact
+  urdf_path: /home/stardust/resources/arena_ws/src/arena/arena-isaac/ros2isaacsim/ros2isaacsim/assets/robots/physx_diff_contact/mecanum730_xms5_physx_diff_contact.urdf
+  x: -4.4
+  y: -1.0
+  z: 0.03
+  full_asset_handoff: false
+  spawn_settling_sec: 1.0
+  spawn_settling_timeout_sec: 4.0
+
+arm_hold:
+  hard_sync: false
+
+gamepad:
+  linear_scale: 0.4
+  angular_scale: 0.8
+
+motion:
+  wheel_radius: 0.08
+  wheel_signs: [1.0, 1.0, 1.0, 1.0]
+  max_wheel_speed: 20.0
+  linear_gain: 1.0
+  angular_gain: 1.0
+  diagnostics_output: /tmp/arena_physx_diff_diagnostics.jsonl
+  diagnostics_run_label: separated_tire_v1_k60_20_f12_4
+  wheel_drive_damping: 30.0
+  wheel_drive_max_force: 300.0
+  wheel_static_friction: 0.02
+  wheel_dynamic_friction: 0.01
+  wheel_friction_combine_mode: min
+  tire_force_enabled: true
+  tire_longitudinal_stiffness: 60.0
+  tire_lateral_stiffness: 20.0
+  tire_max_longitudinal_force: 12.0
+  tire_max_lateral_force: 4.0
+  tire_contact_refresh_sec: 0.10

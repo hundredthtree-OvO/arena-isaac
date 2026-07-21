@@ -19,6 +19,9 @@ setup(
         (os.path.join('share', package_name, 'assets', 'scenes'), glob('ros2isaacsim/assets/scenes/*.usd')),
         (os.path.join('share', package_name, 'assets', 'robots', 'physx_wheels'), glob('ros2isaacsim/assets/robots/physx_wheels/*.usd')),
         (os.path.join('share', package_name, 'assets', 'robots', 'physx_wheels', 'configuration'), glob('ros2isaacsim/assets/robots/physx_wheels/configuration/*.usd')),
+        (os.path.join('share', package_name, 'assets', 'robots', 'physx_diff_contact'), glob('ros2isaacsim/assets/robots/physx_diff_contact/*.urdf')),
+        (os.path.join('share', package_name, 'assets', 'robots', 'physx_diff_contact'), glob('ros2isaacsim/assets/robots/physx_diff_contact/*.usd')),
+        (os.path.join('share', package_name, 'assets', 'robots', 'physx_diff_contact', 'configuration'), glob('ros2isaacsim/assets/robots/physx_diff_contact/configuration/*.usd')),
         (os.path.join('share', package_name, 'assets', 'robots', 'unified_v25730'), glob('ros2isaacsim/assets/robots/unified_v25730/*.urdf')),
         (os.path.join('share', package_name, 'assets', 'robots', 'unified_v25730'), glob('ros2isaacsim/assets/robots/unified_v25730/*.usd')),
         (os.path.join('share', package_name, 'assets', 'robots', 'unified_v25730', 'configuration'), glob('ros2isaacsim/assets/robots/unified_v25730/configuration/*.usd')),
@@ -34,6 +37,7 @@ setup(
         'console_scripts': [
             "run_isaacsim=ros2isaacsim.run_isaacsim:main",
             "convert_urdf_usd=ros2isaacsim.convert_urdf_usd:main",
+            "build_physx_diff_urdf=ros2isaacsim.physx_diff_asset:main",
             'navigation_controller = ros2isaacsim.navigation_controller:main',
             'sdf_to_urdf=ros2isaacsim.SdftoUrdf:main',
             'agent_rl=ros2isaacsim.agent_RL:main',

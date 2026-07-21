@@ -48,7 +48,7 @@ def main(args=None):
     parser.add_argument("--name", default="mecanum730_xms5", help="Robot instance name in Isaac stage.")
     parser.add_argument(
         "--mode",
-        choices=["joint", "hybrid", "kinematic", "physx_wheels"],
+        choices=["joint", "hybrid", "kinematic", "physx_wheels", "physx_diff_contact"],
         default="physx_wheels",
         help="joint = wheel velocity targets only; hybrid = wheel spin + kinematic base fallback; kinematic = base only; physx_wheels = PhysX articulation driven by wheel targets.",
     )

@@ -4,6 +4,11 @@
 #   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml spawn
 #   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml teleop
 
+default_mode: physx_wheels
+mode_files:
+  physx_wheels: modes/physx_wheels.yaml
+  physx_diff_contact: modes/physx_diff_contact.yaml
+
 bridge:
   isaac_path: $HOME/resources/isaac-sim-4.5.0
   log_level: info
@@ -26,30 +31,11 @@ scene:
   yaw: 0.0
 robot:
   name: xms_mecanum
-  # Stage-1 PhysX target: wheel-joint-driven articulation with stable ROS scan/odom outputs.
-  # To return to the direct USD fallback mode, set this to:
-  # mecanum730_xms5_lidar_kinematic
-  model: mecanum730_xms5_lidar_physx_wheels
   cmd_vel_topic: /cmd_vel
   odom_topic: /odom
   odom_frame: odom
   base_frame: base_link
-  urdf_path: /home/stardust/resources/arena_ws/src/arena/arena-isaac/ros2isaacsim/ros2isaacsim/assets/robots/unified_v25730/mecanum730_xms5_gripper_v25730.urdf
-  x: 0.0
-  y: 0.0
-  z: 0.01
   yaw: 0.0
-  full_asset_handoff: true
-  spawn_settling_sec: 10
-  spawn_settling_min_stable_sec: 0.3
-  spawn_settling_timeout_sec: 3.0
-  spawn_settling_max_roll_pitch_deg: 2.0
-  spawn_settling_max_lin_speed: 0.03
-  spawn_settling_max_ang_speed: 0.15
-  spawn_settling_max_z_speed: 0.02
-  full_asset_handoff_settling_sec: 0.6
-  full_asset_handoff_min_stable_sec: 0.2
-  full_asset_handoff_timeout_sec: 2.0
   cmd_vel_applied_topic: /cmd_vel_applied
   use_sim_time: true
 robot_geometry:
@@ -178,17 +164,6 @@ guard:
   overlap_deadband: 0.005
   escape_tolerance: 0.002
   last_free_max_age_sec: 8.0
-motion:
-  smoothing_enabled: true
-  max_linear_speed: 0.8
-  max_lateral_speed: 0.5
-  max_angular_speed: 1.2
-  max_linear_accel: 0.5
-  max_lateral_accel: 0.5
-  max_angular_accel: 0.75
-  max_linear_decel: 0.8
-  max_lateral_decel: 0.8
-  max_angular_decel: 1.2
 physx_root_velocity:
   height_kp: 8.0
   height_max_vel: 0.35
@@ -350,16 +325,27 @@ phases:
     enable_navmesh: false
     lidar_backend: synthetic_2d
   rtx_scan:
+    mode: physx_wheels
     proxy_source: 'off'
     proxy_visible: false
     auto_write_config: false
     enable_scene_collision_repair: true
-    enable_guard: true
     overlap_policy: escape
-    guard_backend: voxel
     enable_people_stack: true
     enable_character_services: true
     people_extension_mode: replicator_agent_core
+    enable_navmesh: false
+    lidar_backend: rtx
+    update_rate: 10.0
+  physx_diff_contact:
+    mode: physx_diff_contact
+    proxy_source: 'off'
+    proxy_visible: false
+    auto_write_config: false
+    enable_scene_collision_repair: true
+    overlap_policy: escape
+    enable_people_stack: false
+    enable_character_services: false
     enable_navmesh: false
     lidar_backend: rtx
     update_rate: 10.0

@@ -28,10 +28,25 @@ import yaml
 
 
 def load_profile(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
+    profile_path = Path(path).expanduser().resolve()
+    with open(profile_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     if not isinstance(data, dict):
         raise RuntimeError(f"invalid profile: {path}")
+    mode_files = data.get("mode_files", {}) or {}
+    if not isinstance(mode_files, dict):
+        raise RuntimeError(f"invalid mode_files mapping: {path}")
+    modes = dict(data.get("modes", {}) or {})
+    for mode, mode_file in mode_files.items():
+        mode_path = Path(_expand(mode_file))
+        if not mode_path.is_absolute():
+            mode_path = profile_path.parent / mode_path
+        with open(mode_path.resolve(), "r", encoding="utf-8") as f:
+            mode_data = yaml.safe_load(f) or {}
+        if not isinstance(mode_data, dict):
+            raise RuntimeError(f"invalid mode profile '{mode}': {mode_path}")
+        modes[str(mode)] = mode_data
+    data["modes"] = modes
     return data
 
 
@@ -54,23 +69,58 @@ def _expand(path: Any) -> str:
     return str(path).replace("$HOME", os.path.expanduser("~"))
 
 
+def _phase_mode(profile: Dict[str, Any], phase: str | None) -> str | None:
+    if phase:
+        phases = profile.get("phases", {}) or {}
+        if phase not in phases:
+            raise RuntimeError(f"unknown phase '{phase}'. Available phases: {', '.join(sorted(phases))}")
+        mode = (phases[phase] or {}).get("mode")
+        if mode:
+            return str(mode)
+    default_mode = profile.get("default_mode")
+    return str(default_mode) if default_mode else None
+
+
+def _phase_section(profile: Dict[str, Any], phase: str | None, section: str) -> Dict[str, Any]:
+    merged = dict(profile.get(section, {}) or {})
+    mode = _phase_mode(profile, phase)
+    if mode:
+        modes = profile.get("modes", {}) or {}
+        if mode not in modes:
+            raise RuntimeError(f"unknown mode '{mode}'. Available modes: {', '.join(sorted(modes))}")
+        merged.update((modes[mode] or {}).get(section, {}) or {})
+    if phase:
+        phases = profile.get("phases", {}) or {}
+        merged.update((phases[phase] or {}).get(section, {}) or {})
+    return merged
+
+
+def _phase_options(profile: Dict[str, Any], phase: str) -> Dict[str, Any]:
+    mode = _phase_mode(profile, phase)
+    options: Dict[str, Any] = {}
+    if mode:
+        options.update(((profile.get("modes", {}) or {}).get(mode, {}) or {}).get("runtime", {}) or {})
+    options.update((profile.get("phases", {}) or {}).get(phase, {}) or {})
+    return options
+
+
 def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str, str]]:
     bridge = profile.get("bridge", {})
-    proxy = profile.get("proxy", {})
-    guard = profile.get("guard", {})
+    proxy = _phase_section(profile, phase, "proxy")
+    guard = _phase_section(profile, phase, "guard")
     collision2d = profile.get("collision2d", {})
     voxel = profile.get("voxel", {})
     pedestrians = profile.get("pedestrians", {})
-    robot = profile.get("robot", {})
-    robot_geometry = profile.get("robot_geometry", {})
-    lidar = profile.get("lidar", {})
-    odom_tf = profile.get("odom_tf", {})
-    motion = profile.get("motion", {})
-    physx = profile.get("physx_root_velocity", {})
-    arm_hold = profile.get("arm_hold", {})
-    gamepad = profile.get("gamepad", {})
+    robot = _phase_section(profile, phase, "robot")
+    robot_geometry = _phase_section(profile, phase, "robot_geometry")
+    lidar = _phase_section(profile, phase, "lidar")
+    odom_tf = _phase_section(profile, phase, "odom_tf")
+    motion = _phase_section(profile, phase, "motion")
+    physx = _phase_section(profile, phase, "physx_root_velocity")
+    arm_hold = _phase_section(profile, phase, "arm_hold")
+    gamepad = _phase_section(profile, phase, "gamepad")
     phases = profile.get("phases", {})
-    phase_cfg = phases.get(phase, {})
+    phase_cfg = _phase_options(profile, phase)
     if not phase_cfg:
         raise RuntimeError(f"unknown phase '{phase}'. Available phases: {', '.join(sorted(phases.keys()))}")
 
@@ -78,6 +128,24 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     env["ISAAC_PATH"] = _expand(bridge.get("isaac_path", os.environ.get("ISAAC_PATH", "$HOME/resources/isaac-sim-4.5.0")))
     env["ARENA_ISAAC_COLLISION_GUARD_OVERLAP_POLICY"] = str(phase_cfg.get("overlap_policy", guard.get("overlap_policy", "escape")))
     env["ARENA_ISAAC_COLLISION_GUARD_BACKEND"] = str(phase_cfg.get("guard_backend", guard.get("backend", "proxy")))
+    env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"] = str(
+        proxy.get("door_collision_policy", "disabled")
+    )
+    env["ARENA_ISAAC_SCENE_DOOR_COLLISION_TARGETS"] = ",".join(
+        str(value) for value in proxy.get("door_collision_targets", [])
+    )
+    env["ARENA_ISAAC_SCENE_DOOR_COLLISION_MESHES"] = ",".join(
+        str(value) for value in proxy.get("door_collision_meshes", [])
+    )
+    env["ARENA_ISAAC_SCENE_DOOR_LEAF_APPROXIMATION"] = str(
+        proxy.get("door_leaf_approximation", "convexHull")
+    )
+    env["ARENA_ISAAC_SCENE_DOOR_FRAME_APPROXIMATION"] = str(
+        proxy.get("door_frame_approximation", "sdf")
+    )
+    env["ARENA_ISAAC_SCENE_DOOR_FRAME_SDF_RESOLUTION"] = str(
+        int(proxy.get("door_frame_sdf_resolution", 256))
+    )
     if "escape_epsilon" in guard:
         env["ARENA_ISAAC_COLLISION_GUARD_ESCAPE_EPS"] = str(guard.get("escape_epsilon"))
     if "overlap_deadband" in guard:
@@ -172,6 +240,41 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         gamepad.get("priority_timeout_sec", 0.30)
     )
     env["ARENA_ISAAC_DIFF_TRACK_WIDTH"] = str(gamepad.get("track_width_m", 0.345))
+    contact_env_keys = {
+        "wheel_drive_damping": "ARENA_ISAAC_DIFF_WHEEL_DRIVE_DAMPING",
+        "wheel_drive_max_force": "ARENA_ISAAC_DIFF_WHEEL_DRIVE_MAX_FORCE",
+        "wheel_static_friction": "ARENA_ISAAC_DIFF_WHEEL_STATIC_FRICTION",
+        "wheel_dynamic_friction": "ARENA_ISAAC_DIFF_WHEEL_DYNAMIC_FRICTION",
+        "wheel_friction_combine_mode": "ARENA_ISAAC_DIFF_WHEEL_FRICTION_COMBINE_MODE",
+        "wheel_radius": "ARENA_ISAAC_DIFF_WHEEL_RADIUS",
+        "max_wheel_speed": "ARENA_ISAAC_DIFF_MAX_WHEEL_SPEED",
+        "wheel_signs": "ARENA_ISAAC_DIFF_WHEEL_SIGNS",
+        "linear_gain": "ARENA_ISAAC_DIFF_LINEAR_GAIN",
+        "angular_gain": "ARENA_ISAAC_DIFF_ANGULAR_GAIN",
+        "tire_force_enabled": "ARENA_ISAAC_DIFF_TIRE_FORCE_ENABLED",
+        "tire_longitudinal_stiffness": "ARENA_ISAAC_DIFF_TIRE_LONGITUDINAL_STIFFNESS",
+        "tire_lateral_stiffness": "ARENA_ISAAC_DIFF_TIRE_LATERAL_STIFFNESS",
+        "tire_max_longitudinal_force": "ARENA_ISAAC_DIFF_TIRE_MAX_LONGITUDINAL_FORCE",
+        "tire_max_lateral_force": "ARENA_ISAAC_DIFF_TIRE_MAX_LATERAL_FORCE",
+        "tire_contact_refresh_sec": "ARENA_ISAAC_DIFF_TIRE_CONTACT_REFRESH_SEC",
+        "diagnostics_output": "ARENA_ISAAC_DIFF_DIAGNOSTICS_OUTPUT",
+        "diagnostics_run_label": "ARENA_ISAAC_DIFF_DIAGNOSTICS_RUN_LABEL",
+    }
+    if "physx_diff_contact" in str(robot.get("model", "")).lower():
+        for key, env_name in contact_env_keys.items():
+            value = motion.get(key)
+            if value is None:
+                continue
+            if key == "wheel_signs":
+                value = ",".join(str(float(x)) for x in value)
+            elif isinstance(value, bool):
+                value = "true" if value else "false"
+            env[env_name] = str(value)
+    else:
+        # A parent shell may retain values from an earlier contact run. Never
+        # let those parameters alter the legacy physx_wheels controller.
+        for env_name in contact_env_keys.values():
+            env.pop(env_name, None)
     env["ARENA_ISAAC_FRONT_LASER_FRAME"] = str(lidar.get("front_frame", robot.get("front_laser_frame", "front_laser_link")))
     env["ARENA_ISAAC_REAR_LASER_FRAME"] = str(lidar.get("rear_frame", robot.get("rear_laser_frame", "rear_laser_link")))
     if robot.get("auto_ground_align") is not None:
@@ -294,9 +397,9 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     return args, env
 
 
-def spawn_cmd(profile: Dict[str, Any]) -> List[str]:
+def spawn_cmd(profile: Dict[str, Any], phase: str | None = None) -> List[str]:
     s = profile.get("scene", {})
-    r = profile.get("robot", {})
+    r = _phase_section(profile, phase, "robot")
     cmd = [
         "ros2", "run", "ros2isaacsim", "spawn_v10_scene_lidar_validation",
         "--scene-mode", str(s.get("mode", "usd")),
@@ -409,8 +512,8 @@ def teleop_cmd(profile: Dict[str, Any]) -> List[str]:
     ]
 
 
-def gamepad_cmd(profile: Dict[str, Any]) -> List[str]:
-    gamepad = profile.get("gamepad", {})
+def gamepad_cmd(profile: Dict[str, Any], phase: str | None = None) -> List[str]:
+    gamepad = _phase_section(profile, phase, "gamepad")
     return [
         "ros2", "launch", "ros2isaacsim", "gamepad_diff_teleop.launch.py",
         f"device_id:={gamepad.get('device_id', 0)}",
@@ -563,15 +666,17 @@ def main(argv=None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_bridge = sub.add_parser("bridge")
-    p_bridge.add_argument("phase", choices=["edit", "verify", "guard", "strict", "guard2d", "strict2d", "debug2d", "voxel_build", "voxel_guard", "voxel_strict", "voxel_debug", "social_nav", "rtx_scan"])
-    sub.add_parser("spawn")
+    p_bridge.add_argument("phase", choices=["edit", "verify", "guard", "strict", "guard2d", "strict2d", "debug2d", "voxel_build", "voxel_guard", "voxel_strict", "voxel_debug", "social_nav", "rtx_scan", "physx_diff_contact"])
+    p_spawn = sub.add_parser("spawn")
+    p_spawn.add_argument("--phase")
     sub.add_parser("export")
     p2d = sub.add_parser("collision2d")
     p2d.add_argument("action", choices=["init", "render", "summary"])
     pv = sub.add_parser("voxel")
     pv.add_argument("action", choices=["build", "render", "summary", "pcd"])
     sub.add_parser("teleop")
-    sub.add_parser("gamepad")
+    p_gamepad = sub.add_parser("gamepad")
+    p_gamepad.add_argument("--phase")
     sub.add_parser("synthetic_laser")
     sub.add_parser("pedestrians")
     p_scheme1 = sub.add_parser("scheme1")
@@ -583,7 +688,7 @@ def main(argv=None) -> int:
         cmd, env = bridge_cmd(profile, args.phase)
         return run(cmd, env=env, dry_run=args.dry_run)
     if args.cmd == "spawn":
-        return run(spawn_cmd(profile), dry_run=args.dry_run)
+        return run(spawn_cmd(profile, args.phase), dry_run=args.dry_run)
     if args.cmd == "export":
         rc = 0
         for cmd in export_cmds(profile):
@@ -603,7 +708,7 @@ def main(argv=None) -> int:
     if args.cmd == "teleop":
         return run(teleop_cmd(profile), dry_run=args.dry_run)
     if args.cmd == "gamepad":
-        return run(gamepad_cmd(profile), dry_run=args.dry_run)
+        return run(gamepad_cmd(profile, args.phase), dry_run=args.dry_run)
     if args.cmd == "synthetic_laser":
         return run(synthetic_laser_cmd(profile), dry_run=args.dry_run)
     if args.cmd == "pedestrians":

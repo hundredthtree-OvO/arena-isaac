@@ -60,6 +60,13 @@ class SceneRepairConfig:
 
     wall_default_enabled: bool = True
     door_default_enabled: bool = False
+    # All doors retain the legacy disabled policy unless explicitly selected.
+    door_collision_policy: str = "disabled"  # disabled | restore_selected_meshes
+    door_collision_targets: Tuple[str, ...] = ()
+    door_collision_meshes: Tuple[str, ...] = ()
+    door_leaf_approximation: str = "convexHull"
+    door_frame_approximation: str = "sdf"
+    door_frame_sdf_resolution: int = 256
     partition_default_enabled: bool = True
     toilet_default_enabled: bool = True
     urinal_default_enabled: bool = True
@@ -95,6 +102,14 @@ def _env_float(name: str, default: float) -> float:
         return float(default)
 
 
+def _env_csv(name: str) -> Tuple[str, ...]:
+    return tuple(
+        value.strip()
+        for value in os.environ.get(name, "").split(",")
+        if value.strip()
+    )
+
+
 def config_from_env() -> SceneRepairConfig:
     mode = os.environ.get("ARENA_ISAAC_SCENE_COLLISION_REPAIR_MODE", "safe").strip().lower()
     enabled = _env_bool("ARENA_ISAAC_ENABLE_SCENE_COLLISION_REPAIR", True)
@@ -122,6 +137,21 @@ def config_from_env() -> SceneRepairConfig:
         enable_cabinet_proxy=_env_bool("ARENA_ISAAC_SCENE_COLLISION_ENABLE_CABINET_PROXY", True),
         wall_default_enabled=_env_bool("ARENA_ISAAC_SCENE_COLLISION_WALL_DEFAULT_ENABLED", True),
         door_default_enabled=_env_bool("ARENA_ISAAC_SCENE_COLLISION_DOOR_DEFAULT_ENABLED", False),
+        door_collision_policy=os.environ.get(
+            "ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY", "disabled"
+        ).strip(),
+        door_collision_targets=_env_csv("ARENA_ISAAC_SCENE_DOOR_COLLISION_TARGETS"),
+        door_collision_meshes=_env_csv("ARENA_ISAAC_SCENE_DOOR_COLLISION_MESHES"),
+        door_leaf_approximation=os.environ.get(
+            "ARENA_ISAAC_SCENE_DOOR_LEAF_APPROXIMATION", "convexHull"
+        ).strip(),
+        door_frame_approximation=os.environ.get(
+            "ARENA_ISAAC_SCENE_DOOR_FRAME_APPROXIMATION", "sdf"
+        ).strip(),
+        door_frame_sdf_resolution=max(
+            1,
+            int(_env_float("ARENA_ISAAC_SCENE_DOOR_FRAME_SDF_RESOLUTION", 256)),
+        ),
         partition_default_enabled=_env_bool("ARENA_ISAAC_SCENE_COLLISION_PARTITION_DEFAULT_ENABLED", True),
         toilet_default_enabled=_env_bool("ARENA_ISAAC_SCENE_COLLISION_TOILET_DEFAULT_ENABLED", True),
         urinal_default_enabled=_env_bool("ARENA_ISAAC_SCENE_COLLISION_URINAL_DEFAULT_ENABLED", True),
@@ -188,6 +218,56 @@ def _disable_collision_recursive(root: Usd.Prim) -> int:
             if _set_collision_enabled(prim, False):
                 count += 1
     return count
+
+
+def _is_selected_door_mesh(prim: Usd.Prim, config: SceneRepairConfig) -> bool:
+    path_parts = tuple(part for part in prim.GetPath().pathString.split("/") if part)
+    return (
+        prim.GetName() in config.door_collision_meshes
+        and any(target in path_parts for target in config.door_collision_targets)
+    )
+
+
+def _door_mesh_approximation(prim: Usd.Prim, config: SceneRepairConfig) -> str:
+    name = prim.GetName().lower()
+    if "frame" in name or name == "static":
+        return config.door_frame_approximation
+    return config.door_leaf_approximation
+
+
+def _restore_selected_door_mesh_collisions(root: Usd.Prim, config: SceneRepairConfig, report: Dict) -> int:
+    restored = 0
+    for prim in Usd.PrimRange(root):
+        if not prim.IsValid() or not prim.IsActive() or not prim.IsA(UsdGeom.Mesh):
+            continue
+        if not _is_selected_door_mesh(prim, config) or not _has_collision_like(prim):
+            continue
+        approximation = _door_mesh_approximation(prim, config)
+        try:
+            UsdPhysics.CollisionAPI.Apply(prim).CreateCollisionEnabledAttr(True).Set(True)
+            UsdPhysics.MeshCollisionAPI.Apply(prim).CreateApproximationAttr().Set(approximation)
+            if approximation == "sdf" and PhysxSchema is not None:
+                PhysxSchema.PhysxSDFMeshCollisionAPI.Apply(prim).CreateSdfResolutionAttr().Set(
+                    int(config.door_frame_sdf_resolution)
+                )
+            restored += 1
+            report.setdefault("restored", []).append(
+                {
+                    "path": prim.GetPath().pathString,
+                    "reason": "contact_mode_door_mesh_collision",
+                    "approximation": approximation,
+                    "sdf_resolution": (
+                        int(config.door_frame_sdf_resolution)
+                        if approximation == "sdf"
+                        else None
+                    ),
+                }
+            )
+        except Exception as exc:
+            report.setdefault("warnings", []).append(
+                f"failed to restore door collision {prim.GetPath().pathString}: {exc}"
+            )
+    return restored
 
 
 def _world_bbox(cache: UsdGeom.BBoxCache, prim: Usd.Prim) -> Optional[Tuple[Gf.Vec3d, Gf.Vec3d, Gf.Vec3d]]:
@@ -661,6 +741,7 @@ def inspect_and_repair_scene(
         "collision_like_count": 0,
         "thin_collision_count": 0,
         "disabled": [],
+        "restored": [],
         "proxies": [],
         "proxy_counts_by_kind": {},
         "warnings": [],
@@ -710,6 +791,16 @@ def inspect_and_repair_scene(
         except Exception as exc:
             report["warnings"].append(f"shenxinfu_841837_stall_fix failed: {exc}")
             print(f"[scene_collision_repair] shenxinfu_841837 stall fix failed: {exc}")
+
+    if (
+        config.mode in {"safe", "aggressive"}
+        and config.door_collision_policy == "restore_selected_meshes"
+    ):
+        restored_count = _restore_selected_door_mesh_collisions(root, config, report)
+        print(
+            f"[scene_collision_repair] restored {restored_count} selected door mesh collisions "
+            f"under {scene_root_path}"
+        )
 
     if config.mode not in {"safe", "aggressive"}:
         _write_report(report, config)
@@ -787,7 +878,8 @@ def inspect_and_repair_scene(
         f"[scene_collision_repair] scene={scene_name} root={scene_root_path} "
         f"mode={config.mode} source={config.proxy_source} collision_like={report['collision_like_count']} "
         f"thin={report['thin_collision_count']} disabled={len(report['disabled'])} "
-        f"proxies={len(report['proxies'])} by_kind={report.get('proxy_counts_by_kind', {})}"
+        f"restored={len(report['restored'])} proxies={len(report['proxies'])} "
+        f"by_kind={report.get('proxy_counts_by_kind', {})}"
     )
     return report
 

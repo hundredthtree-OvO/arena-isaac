@@ -7,6 +7,11 @@ from geometry_msgs/Twist.
 Modes:
 - joint:     send wheel joint velocity targets only. This is the most physically
              faithful path, but it requires valid wheel/roller collision geometry.
+- physx_diff_contact:
+             send differential wheel velocity targets only. Chassis motion must
+             come exclusively from PhysX wheel-ground contact; lateral commands,
+             root writes, collision-guard filtering, and kinematic fallback are
+             intentionally excluded.
 - physx_wheels:
              use motion-based root control for chassis locomotion while keeping
              wheel motion as visual rolling only. This is the recommended
@@ -22,11 +27,13 @@ Modes:
 """
 from __future__ import annotations
 
+import json
 import math
 import os
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -46,6 +53,15 @@ from ros2isaacsim.drive_kinematics import (
     DIFFERENTIAL_DRIVE,
     MECANUM_DRIVE,
     wheel_angular_speeds,
+)
+from ros2isaacsim.actual_motion_state import ActualMotionStateEstimator
+from ros2isaacsim.motion_backends import motion_backend_for_mode
+from ros2isaacsim.physx_diff_contact import (
+    PhysxDiffContactDrive,
+    articulation_link_wrench_arrays,
+    config_from_values,
+    separated_tire_wrench,
+    single_articulation_targets,
 )
 try:
     from isaac_utils.collision_guard import KinematicCollisionGuard, config_from_env as collision_guard_config_from_env
@@ -146,13 +162,25 @@ class MecanumConfig:
     # Estimated wheel radius. If the robot is too slow/fast, tune this first.
     wheel_radius: float = 0.060
     max_wheel_speed: float = 20.0
+    wheel_drive_damping: float = 8.0
+    wheel_drive_max_force: float = 35.0
+    wheel_static_friction: float = 0.25
+    wheel_dynamic_friction: float = 0.20
+    differential_linear_gain: float = 1.0
+    differential_angular_gain: float = 1.0
+    separated_tire_force_enabled: bool = False
+    tire_longitudinal_stiffness: float = 60.0
+    tire_lateral_stiffness: float = 20.0
+    tire_max_longitudinal_force: float = 12.0
+    tire_max_lateral_force: float = 4.0
+    tire_contact_refresh_sec: float = 0.10
     max_linear_speed: float = 0.8
     max_lateral_speed: float = 0.5
     max_angular_speed: float = 1.2
     # Joint sign convention may need tuning after first physical test.
     # Default is chosen for a common X mecanum layout.
     wheel_signs: List[float] = field(default_factory=lambda: [1.0, -1.0, 1.0, -1.0])
-    mode: str = "joint"  # joint | physx_wheels | hybrid | kinematic | physx_root_velocity
+    mode: str = "joint"  # joint | physx_diff_contact | physx_wheels | hybrid | kinematic | physx_root_velocity
     timeout_sec: float = 0.5
     differential_timeout_sec: float = 0.30
     # v18: optional velocity slew-rate limiter for more realistic mobile-base
@@ -201,11 +229,14 @@ def parse_mecanum_config(robot_model: str) -> MecanumConfig:
       - mecanum730_xms5_kinematic
       - mecanum730_xms5_lidar_physx_root_velocity
       - mecanum730_xms5_lidar_physx_wheels
+      - mecanum730_xms5_lidar_physx_diff_contact
       - mecanum730_xms5_physx
     """
     config = MecanumConfig()
     model = (robot_model or "").lower()
-    if "physx_wheels" in model:
+    if "physx_diff_contact" in model:
+        config.mode = "physx_diff_contact"
+    elif "physx_wheels" in model:
         config.mode = "physx_wheels"
     elif "physx_root_velocity" in model or model.endswith("_physx"):
         config.mode = "physx_root_velocity"
@@ -219,6 +250,83 @@ def parse_mecanum_config(robot_model: str) -> MecanumConfig:
     config.max_linear_speed = _env_float("ARENA_ISAAC_MAX_LINEAR_SPEED", config.max_linear_speed)
     config.max_lateral_speed = _env_float("ARENA_ISAAC_MAX_LATERAL_SPEED", config.max_lateral_speed)
     config.max_angular_speed = _env_float("ARENA_ISAAC_MAX_ANGULAR_SPEED", config.max_angular_speed)
+    config.wheel_radius = max(
+        1.0e-6,
+        _env_float("ARENA_ISAAC_DIFF_WHEEL_RADIUS", config.wheel_radius),
+    )
+    config.max_wheel_speed = max(
+        0.0,
+        _env_float("ARENA_ISAAC_DIFF_MAX_WHEEL_SPEED", config.max_wheel_speed),
+    )
+    wheel_signs = _env_float_list("ARENA_ISAAC_DIFF_WHEEL_SIGNS", len(config.wheel_signs))
+    if wheel_signs is not None:
+        config.wheel_signs = wheel_signs
+    config.wheel_drive_damping = max(
+        0.0,
+        _env_float("ARENA_ISAAC_DIFF_WHEEL_DRIVE_DAMPING", config.wheel_drive_damping),
+    )
+    config.wheel_drive_max_force = max(
+        0.0,
+        _env_float("ARENA_ISAAC_DIFF_WHEEL_DRIVE_MAX_FORCE", config.wheel_drive_max_force),
+    )
+    config.wheel_static_friction = max(
+        0.0,
+        _env_float("ARENA_ISAAC_DIFF_WHEEL_STATIC_FRICTION", config.wheel_static_friction),
+    )
+    config.wheel_dynamic_friction = max(
+        0.0,
+        min(
+            config.wheel_static_friction,
+            _env_float("ARENA_ISAAC_DIFF_WHEEL_DYNAMIC_FRICTION", config.wheel_dynamic_friction),
+        ),
+    )
+    config.differential_linear_gain = max(
+        1.0e-6,
+        _env_float("ARENA_ISAAC_DIFF_LINEAR_GAIN", config.differential_linear_gain),
+    )
+    config.differential_angular_gain = max(
+        1.0e-6,
+        _env_float("ARENA_ISAAC_DIFF_ANGULAR_GAIN", config.differential_angular_gain),
+    )
+    config.separated_tire_force_enabled = _env_bool(
+        "ARENA_ISAAC_DIFF_TIRE_FORCE_ENABLED",
+        config.separated_tire_force_enabled,
+    )
+    config.tire_longitudinal_stiffness = max(
+        0.0,
+        _env_float(
+            "ARENA_ISAAC_DIFF_TIRE_LONGITUDINAL_STIFFNESS",
+            config.tire_longitudinal_stiffness,
+        ),
+    )
+    config.tire_lateral_stiffness = max(
+        0.0,
+        _env_float(
+            "ARENA_ISAAC_DIFF_TIRE_LATERAL_STIFFNESS",
+            config.tire_lateral_stiffness,
+        ),
+    )
+    config.tire_max_longitudinal_force = max(
+        0.0,
+        _env_float(
+            "ARENA_ISAAC_DIFF_TIRE_MAX_LONGITUDINAL_FORCE",
+            config.tire_max_longitudinal_force,
+        ),
+    )
+    config.tire_max_lateral_force = max(
+        0.0,
+        _env_float(
+            "ARENA_ISAAC_DIFF_TIRE_MAX_LATERAL_FORCE",
+            config.tire_max_lateral_force,
+        ),
+    )
+    config.tire_contact_refresh_sec = max(
+        0.02,
+        _env_float(
+            "ARENA_ISAAC_DIFF_TIRE_CONTACT_REFRESH_SEC",
+            config.tire_contact_refresh_sec,
+        ),
+    )
     config.differential_track_width = max(
         0.0,
         _env_float("ARENA_ISAAC_DIFF_TRACK_WIDTH", config.differential_track_width),
@@ -514,6 +622,19 @@ class MecanumRobot:
         self.handoff_nav_base_path = handoff_nav_base_path or handoff_prim_path
         self.cmd_vel_topic = cmd_vel_topic
         self.config = config
+        self._motion_backend = motion_backend_for_mode(config.mode)
+        self._actual_state_estimator = ActualMotionStateEstimator()
+        self._physx_diff_drive = PhysxDiffContactDrive(
+            config_from_values(
+                wheel_radius=config.wheel_radius,
+                track_width=config.differential_track_width,
+                wheel_signs=config.wheel_signs,
+                max_wheel_speed=config.max_wheel_speed,
+                linear_gain=config.differential_linear_gain,
+                angular_gain=config.differential_angular_gain,
+            ),
+            self._apply_joint_velocity_targets,
+        )
         self.logger = logger
         self.node = node
         self.odom_frame = str(os.environ.get("ARENA_ISAAC_ODOM_FRAME", odom_frame or "odom"))
@@ -561,6 +682,9 @@ class MecanumRobot:
         self._applied_wz = 0.0
         self._last_guard_mode = "init"
         self._articulation = None
+        self._diff_base_link_index: Optional[int] = None
+        self._last_diff_force_view_attempt = 0.0
+        self._warned_diff_force_view = False
         self._xform = None
         self._joint_indices: Optional[List[int]] = None
         # _heading is the incremental yaw applied by the kinematic/hybrid
@@ -580,6 +704,20 @@ class MecanumRobot:
         self._warned_physx_velocity_fallback = False
         self._arm_joint_indices: Optional[List[int]] = None
         self._last_cmd_log_t = 0.0
+        self._last_wheel_target_log_t = 0.0
+        self._last_diff_contact_sample_t = 0.0
+        self._diff_contact_samples: List[Dict] = []
+        self._measured_vx = 0.0
+        self._measured_vy = 0.0
+        self._measured_wz = 0.0
+        self._diff_diagnostics_output = os.environ.get(
+            "ARENA_ISAAC_DIFF_DIAGNOSTICS_OUTPUT",
+            "/tmp/arena_physx_diff_diagnostics.jsonl",
+        ).strip()
+        self._diff_diagnostics_run_label = os.environ.get(
+            "ARENA_ISAAC_DIFF_DIAGNOSTICS_RUN_LABEL",
+            "default",
+        ).strip() or "default"
         self._motion_nominal_z = None
         self._warned_motion_root_fallback = False
         self._gripper_joint_indices: Optional[List[int]] = None
@@ -595,6 +733,7 @@ class MecanumRobot:
         self._handoff_completed = False
         self._warned_missing_articulation_controller = False
         self._warned_joint_hold_failure = False
+        self._warned_wheel_target_failure = False
         self._hold_drive_configured = False
         self._warned_hold_drive_no_match = False
         self._hold_drive_configured_paths = set()
@@ -745,7 +884,11 @@ class MecanumRobot:
                 self._roller_joint_indices = roller_joint_indices or None
                 if self._roller_joint_indices:
                     self._roller_hold_positions = self._read_joint_positions(self._roller_joint_indices)
-                self._ensure_hold_scene_constraints(force=True)
+                if self.config.mode == "physx_diff_contact":
+                    self._configure_physx_diff_wheel_drives()
+                    self._ensure_diff_articulation_force_view(force=True)
+                else:
+                    self._ensure_hold_scene_constraints(force=True)
             except Exception as exc:
                 if self.config.mode == "hybrid":
                     self._log_warn(f"[{self.name}] articulation wheel control unavailable; hybrid will run as kinematic root control: {exc}")
@@ -764,6 +907,10 @@ class MecanumRobot:
                 f"prim={self.prim_path}, articulation={self.articulation_path}, joints={self.config.wheel_joints}, indices={self._joint_indices}, "
                 f"arm_hold={self.config.arm_hold_positions}, gripper_hold={self.config.gripper_hold_positions}, "
                 f"roller_freeze_count={0 if self._roller_joint_indices is None else len(self._roller_joint_indices)}, "
+                f"wheel_radius={self.config.wheel_radius:.3f}, wheel_signs={self.config.wheel_signs}, "
+                f"max_wheel_speed={self.config.max_wheel_speed:.3f}, "
+                f"diff_gains=({self.config.differential_linear_gain:.3f}, "
+                f"{self.config.differential_angular_gain:.3f}), "
                 f"collision_guard={guard_state}, smoothing={'enabled' if self.config.smoothing_enabled else 'disabled'}"
             )
             return True
@@ -980,6 +1127,12 @@ class MecanumRobot:
     def _maybe_create_collision_guard(self):
         if self._collision_guard is not None:
             return
+        if self._motion_backend is not None and not self._motion_backend.uses_collision_guard:
+            self._log_info(
+                f"[{self.name}] collision_guard disabled for {self.config.mode}; "
+                "static blocking is delegated to PhysX contacts"
+            )
+            return
         enabled = str(os.environ.get("ARENA_ISAAC_ENABLE_KINEMATIC_COLLISION_GUARD", "true")).strip().lower() in {"1", "true", "yes", "on"}
         if not enabled:
             self._log_info(f"[{self.name}] collision_guard disabled by ARENA_ISAAC_ENABLE_KINEMATIC_COLLISION_GUARD")
@@ -1115,6 +1268,222 @@ class MecanumRobot:
             vals = np.array(vals, dtype=np.float32)
             return vals[idx_arr]
         except Exception:
+            return None
+
+    def _read_joint_velocities(self, joint_indices: Optional[List[int]]) -> Optional[np.ndarray]:
+        if self._articulation is None or not joint_indices:
+            return None
+        idx_arr = np.array(joint_indices, dtype=np.int32)
+        try:
+            values = self._articulation.get_joint_velocities(joint_indices=idx_arr)
+            return np.array(values, dtype=np.float32).reshape(-1)
+        except Exception:
+            pass
+        try:
+            values = np.array(self._articulation.get_joint_velocities(), dtype=np.float32)
+            if values.ndim == 2 and values.shape[0] == 1:
+                values = values[0]
+            return values[idx_arr].reshape(-1)
+        except Exception:
+            return None
+
+    def _sample_physx_diff_wheel_contacts(self) -> List[Dict]:
+        """Use small overlap boxes to identify non-robot shapes touching each tire."""
+        try:
+            import carb
+            import omni.physx
+
+            stage = get_current_stage()
+            if stage is None:
+                return []
+            roots = self._hold_scene_root_prims()
+            robot_prefixes = tuple(str(root.GetPath()).rstrip("/") for root in roots)
+            wheel_names = [name.replace("_joint", "_link") for name in self.config.wheel_joints]
+            wheel_prims = {}
+            for root in roots:
+                for prim in Usd.PrimRange(root):
+                    if prim.GetName() in wheel_names and prim.GetName() not in wheel_prims:
+                        wheel_prims[prim.GetName()] = prim
+            xform_cache = UsdGeom.XformCache(Usd.TimeCode.Default())
+            scene_query = omni.physx.get_physx_scene_query_interface()
+            samples = []
+            for wheel_name in wheel_names:
+                prim = wheel_prims.get(wheel_name)
+                if prim is None:
+                    samples.append({"wheel": wheel_name, "contact": None, "external_hits": []})
+                    continue
+                center_vec = xform_cache.GetLocalToWorldTransform(prim).ExtractTranslation()
+                center = tuple(float(center_vec[index]) for index in range(3))
+                hits = []
+
+                def _on_hit(hit):
+                    paths = []
+                    for attribute in ("collision", "rigid_body"):
+                        try:
+                            value = str(getattr(hit, attribute))
+                        except Exception:
+                            continue
+                        if value and value != "None":
+                            paths.append(value)
+                    hits.extend(paths)
+                    return True
+
+                scene_query.overlap_box(
+                    carb.Float3(0.035, 0.070, 0.085),
+                    carb.Float3(*center),
+                    carb.Float4(0.0, 0.0, 0.0, 1.0),
+                    _on_hit,
+                    False,
+                )
+                external_hits = sorted(
+                    {
+                        path
+                        for path in hits
+                        if not any(
+                            path == prefix or path.startswith(prefix + "/")
+                            for prefix in robot_prefixes
+                        )
+                    }
+                )
+                samples.append(
+                    {
+                        "wheel": wheel_name,
+                        "center": list(center),
+                        "contact": bool(external_hits),
+                        "external_hits": external_hits,
+                    }
+                )
+            return samples
+        except Exception as exc:
+            return [{"wheel": "query", "contact": None, "external_hits": [], "error": str(exc)}]
+
+    def _append_physx_diff_diagnostic(self, payload: Dict) -> None:
+        if not self._diff_diagnostics_output:
+            return
+        try:
+            path = Path(self._diff_diagnostics_output).expanduser()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(payload, sort_keys=True) + "\n")
+        except Exception as exc:
+            self._log_warn(f"[{self.name}] failed to append differential diagnostics: {exc}")
+
+    def _ensure_diff_articulation_force_view(self, *, force: bool = False) -> bool:
+        if not self.config.separated_tire_force_enabled:
+            return False
+        try:
+            physics_view = getattr(self._articulation, "_physics_view", None)
+            if (
+                self._diff_base_link_index is not None
+                and self._articulation is not None
+                and self._articulation.is_physics_handle_valid()
+                and physics_view is not None
+            ):
+                return True
+        except Exception:
+            self._diff_base_link_index = None
+
+        now = time.monotonic()
+        if not force and now - self._last_diff_force_view_attempt < 1.0:
+            return False
+        self._last_diff_force_view_attempt = now
+        try:
+            if self._articulation is None:
+                raise RuntimeError("articulation is unavailable")
+            self._articulation.initialize()
+            if not self._articulation.is_physics_handle_valid():
+                raise RuntimeError("articulation physics handle is not ready")
+            physics_view = getattr(self._articulation, "_physics_view", None)
+            if physics_view is None:
+                raise RuntimeError("articulation tensor view is unavailable")
+            base_link_index = self._articulation.get_link_index("base_link")
+            if base_link_index is None:
+                raise RuntimeError(
+                    f"base_link is absent from articulation links {getattr(self._articulation, 'body_names', [])}"
+                )
+            if int(base_link_index) >= int(physics_view.max_links):
+                raise RuntimeError("base_link index is outside the articulation tensor view")
+            self._diff_base_link_index = int(base_link_index)
+            self._warned_diff_force_view = False
+            self._log_info(
+                f"[{self.name}] separated tire-force model attached to articulation link "
+                f"base_link[{self._diff_base_link_index}]: "
+                f"longitudinal=(k={self.config.tire_longitudinal_stiffness:.1f}, "
+                f"max={self.config.tire_max_longitudinal_force:.1f}N), "
+                f"lateral=(k={self.config.tire_lateral_stiffness:.1f}, "
+                f"max={self.config.tire_max_lateral_force:.1f}N)"
+            )
+            return True
+        except Exception as exc:
+            self._diff_base_link_index = None
+            if not self._warned_diff_force_view:
+                self._warned_diff_force_view = True
+                self._log_warn(
+                    f"[{self.name}] separated tire-force model is waiting for articulation physics: {exc}"
+                )
+            return False
+
+    def _current_physx_diff_contacts(self, *, force_refresh: bool = False) -> List[Dict]:
+        now = time.monotonic()
+        if (
+            force_refresh
+            or not self._diff_contact_samples
+            or now - self._last_diff_contact_sample_t >= self.config.tire_contact_refresh_sec
+        ):
+            self._diff_contact_samples = self._sample_physx_diff_wheel_contacts()
+            self._last_diff_contact_sample_t = now
+        return self._diff_contact_samples
+
+    def _apply_separated_tire_forces(
+        self,
+        actual_wheel_velocities: Optional[np.ndarray],
+        contacts: List[Dict],
+    ) -> Optional[Dict]:
+        if not self.config.separated_tire_force_enabled:
+            return None
+        if actual_wheel_velocities is None or np.asarray(actual_wheel_velocities).size != 4:
+            return None
+        if not self._ensure_diff_articulation_force_view():
+            return None
+
+        contact_mask = [sample.get("contact") is True for sample in contacts]
+        wrench = separated_tire_wrench(
+            joint_velocities=np.asarray(actual_wheel_velocities).reshape(-1),
+            wheel_radius=self.config.wheel_radius,
+            wheel_signs=self.config.wheel_signs,
+            half_length=self.config.half_length,
+            half_width=0.5 * self.config.differential_track_width,
+            measured_vx=self._measured_vx,
+            measured_vy=self._measured_vy,
+            measured_wz=self._measured_wz,
+            longitudinal_stiffness=self.config.tire_longitudinal_stiffness,
+            lateral_stiffness=self.config.tire_lateral_stiffness,
+            max_longitudinal_force=self.config.tire_max_longitudinal_force,
+            max_lateral_force=self.config.tire_max_lateral_force,
+            contact_mask=contact_mask,
+        )
+        try:
+            physics_view = self._articulation._physics_view
+            forces, torques, indices = articulation_link_wrench_arrays(
+                articulation_count=int(physics_view.count),
+                max_links=int(physics_view.max_links),
+                link_index=int(self._diff_base_link_index),
+                force=wrench["net_force_body_n"],
+                torque=wrench["net_torque_body_nm"],
+            )
+            physics_view.apply_forces_and_torques_at_position(
+                forces,
+                torques,
+                None,
+                indices,
+                False,
+            )
+            return wrench
+        except Exception as exc:
+            self._diff_base_link_index = None
+            if not self._warned_diff_force_view:
+                self._warned_diff_force_view = True
+                self._log_warn(f"[{self.name}] failed to apply separated tire forces: {exc}")
             return None
 
     def _hold_scene_root_prims(self):
@@ -1254,6 +1623,71 @@ class MecanumRobot:
             )
         return False
 
+    def _configure_physx_diff_wheel_drives(self) -> bool:
+        """Configure imported wheel joints as finite-force angular velocity drives."""
+        if UsdPhysics is None:
+            return False
+        wheel_names = set(self.config.wheel_joints)
+        updated_paths = set()
+        for root in self._hold_scene_root_prims():
+            for prim in Usd.PrimRange(root):
+                if prim.GetName() not in wheel_names or not prim.IsA(UsdPhysics.RevoluteJoint):
+                    continue
+                if self._set_drive_attrs(
+                    prim,
+                    "angular",
+                    target_velocity=0.0,
+                    stiffness=0.0,
+                    damping=self.config.wheel_drive_damping,
+                    max_force=self.config.wheel_drive_max_force,
+                ):
+                    updated_paths.add(str(prim.GetPath()))
+        runtime_configured = False
+        if self._articulation is not None and self._joint_indices:
+            indices = np.asarray(self._joint_indices, dtype=np.int32)
+            kps = single_articulation_targets(np.zeros(len(indices), dtype=np.float32))
+            kds = single_articulation_targets(
+                np.full(len(indices), self.config.wheel_drive_damping, dtype=np.float32)
+            )
+            max_efforts = single_articulation_targets(
+                np.full(len(indices), self.config.wheel_drive_max_force, dtype=np.float32)
+            )
+            try:
+                self._articulation.set_gains(kps=kps, kds=kds, joint_indices=indices)
+                self._articulation.set_max_efforts(values=max_efforts, joint_indices=indices)
+                gains = self._articulation.get_gains(joint_indices=indices)
+                efforts = self._articulation.get_max_efforts(joint_indices=indices)
+                if gains is not None and efforts is not None:
+                    read_kps, read_kds = gains
+                    runtime_configured = (
+                        np.allclose(np.asarray(read_kps), 0.0, atol=1.0e-4)
+                        and np.allclose(
+                            np.asarray(read_kds),
+                            self.config.wheel_drive_damping,
+                            rtol=1.0e-4,
+                            atol=1.0e-4,
+                        )
+                        and np.allclose(
+                            np.asarray(efforts),
+                            self.config.wheel_drive_max_force,
+                            rtol=1.0e-4,
+                            atol=1.0e-4,
+                        )
+                    )
+            except Exception as exc:
+                self._log_warn(f"[{self.name}] failed to configure runtime wheel drive gains: {exc}")
+        if updated_paths and runtime_configured:
+            self._log_info(
+                f"[{self.name}] configured {len(updated_paths)} PhysX differential wheel drives: "
+                f"damping={self.config.wheel_drive_damping:.3f}, "
+                f"max_force={self.config.wheel_drive_max_force:.3f}, runtime_readback=ok"
+            )
+        elif not updated_paths:
+            self._log_warn(f"[{self.name}] no PhysX differential wheel drive prims were configured")
+        else:
+            self._log_warn(f"[{self.name}] PhysX wheel drive USD attributes exist but runtime readback failed")
+        return len(updated_paths) == len(wheel_names) and runtime_configured
+
     def _configure_hold_link_gravity(self) -> bool:
         if UsdPhysics is None or not self.config.arm_hold_disable_gravity:
             return False
@@ -1388,21 +1822,41 @@ class MecanumRobot:
     def _apply_joint_velocity_targets(self, speeds: np.ndarray):
         if self._articulation is None or self._joint_indices is None:
             return
+        indices = np.array(self._joint_indices, dtype=np.int32)
         try:
-            # Preferred modern API.
+            # Isaac 4.5's Articulation is a view API and requires (M, K), even
+            # for one robot. A flat (K,) array can be accepted without raising
+            # while failing to update the intended DOF targets.
             self._articulation.set_joint_velocity_targets(
-                velocities=speeds,
-                joint_indices=np.array(self._joint_indices, dtype=np.int32),
+                velocities=single_articulation_targets(speeds),
+                joint_indices=indices,
             )
             return
         except Exception:
             pass
         try:
+            # Compatibility with legacy single-articulation wrappers.
+            self._articulation.set_joint_velocity_targets(
+                velocities=np.asarray(speeds, dtype=np.float32),
+                joint_indices=indices,
+            )
+            return
+        except Exception:
+            pass
+        if self.config.mode == "physx_diff_contact":
+            if not self._warned_wheel_target_failure:
+                self._warned_wheel_target_failure = True
+                self._log_warn(
+                    f"[{self.name}] failed to apply PhysX wheel drive targets; "
+                    "direct joint-state fallback is disabled in contact mode"
+                )
+            return
+        try:
             # Fallback: directly set the joint velocity state. Less ideal than a
             # drive target, but useful across Isaac API variants.
             self._articulation.set_joint_velocities(
                 velocities=speeds,
-                joint_indices=np.array(self._joint_indices, dtype=np.int32),
+                joint_indices=indices,
             )
             return
         except Exception:
@@ -1410,13 +1864,15 @@ class MecanumRobot:
         try:
             action = ArticulationAction(
                 joint_velocities=speeds,
-                joint_indices=np.array(self._joint_indices, dtype=np.int32),
+                joint_indices=indices,
             )
             self._apply_articulation_action(action, context="wheel velocity")
         except Exception as exc:
             self._log_warn(f"[{self.name}] failed to apply wheel velocity targets: {exc}")
 
     def _apply_navigation_hold_targets(self):
+        if self._motion_backend is not None and not self._motion_backend.applies_navigation_hold:
+            return
         self._ensure_hold_scene_constraints()
         self._apply_joint_hold(
             self._arm_joint_indices,
@@ -1497,8 +1953,6 @@ class MecanumRobot:
             self._log_warn(f"[{self.name}] failed to publish static lidar TF: {exc}")
 
     def _publish_actual_odom_tf(self):
-        if not self.publish_actual_odom_tf or self.node is None:
-            return
         try:
             pos, quat = _get_usd_xform_pose(self.prim_path)
         except Exception:
@@ -1507,6 +1961,14 @@ class MecanumRobot:
             pos = self._kinematic_pos
             align = self._spawn_orientation_wxyz if self._spawn_orientation_wxyz is not None else np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
             quat = _quat_multiply_wxyz(_yaw_to_quat_wxyz(self._heading), align)
+        state = self._actual_state_estimator.sample(pos, quat)
+        self._measured_vx = state.vx
+        self._measured_vy = state.vy
+        self._measured_wz = state.wz
+
+        if not self.publish_actual_odom_tf or self.node is None:
+            return
+
         stamp = self._current_tf_stamp()
         self._publish_static_sensor_tf_once(None)
         if stamp is None:
@@ -1528,9 +1990,14 @@ class MecanumRobot:
                 odom.pose.pose.orientation.y = qy
                 odom.pose.pose.orientation.z = qz
                 odom.pose.pose.orientation.w = qw
-                odom.twist.twist.linear.x = float(self._applied_vx)
-                odom.twist.twist.linear.y = float(self._applied_vy)
-                odom.twist.twist.angular.z = float(self._applied_wz)
+                if self._motion_backend is not None and self._motion_backend.uses_measured_odom_twist:
+                    odom.twist.twist.linear.x = state.vx
+                    odom.twist.twist.linear.y = state.vy
+                    odom.twist.twist.angular.z = state.wz
+                else:
+                    odom.twist.twist.linear.x = float(self._applied_vx)
+                    odom.twist.twist.linear.y = float(self._applied_vy)
+                    odom.twist.twist.angular.z = float(self._applied_wz)
                 # Conservative covariance for simulated kinematic odometry.
                 odom.pose.covariance[0] = 0.01
                 odom.pose.covariance[7] = 0.01
@@ -1732,34 +2199,15 @@ class MecanumRobot:
 
         return bool(wrote_pose or wrote_velocity)
 
-    def _apply_physx_wheels_base(
-        self,
-        vx: float,
-        vy: float,
-        wz: float,
-        dt: float,
-        drive_mode: str = MECANUM_DRIVE,
-    ):
+    def _current_base_pose_for_motion(self):
         try:
             pos, quat = _get_usd_xform_pose(self.prim_path)
             heading = _quat_wxyz_to_yaw(quat)
         except Exception:
             pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+            quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
             heading = 0.0
-
-        vx, vy, wz, guard_mode = self._filter_with_collision_guard(pos, heading, vx, vy, wz, dt, "physx_wheels")
-        self._applied_vx, self._applied_vy, self._applied_wz = float(vx), float(vy), float(wz)
-        self._last_guard_mode = guard_mode
-        self._publish_applied_cmd_vel()
-
-        wheel_speeds = self._wheel_speeds(vx, vy, wz, drive_mode)
-        self._apply_navigation_hold_targets()
-        self._apply_joint_velocity_targets(wheel_speeds)
-        wrote = self._apply_motion_based_root(pos, quat, vx, vy, wz, dt)
-        if not wrote and self.config.physx_fallback_kinematic:
-            self._apply_kinematic_base(vx, vy, wz, dt)
-            return
-        self._publish_actual_odom_tf()
+        return pos, quat, heading
 
     def _apply_kinematic_base(self, vx: float, vy: float, wz: float, dt: float):
         # Direct USD kinematic control.  Do not instantiate XFormPrim or
@@ -1831,8 +2279,8 @@ class MecanumRobot:
 
         if self.config.mode in ("joint", "hybrid") and self._articulation is not None:
             self._apply_joint_velocity_targets(wheel_speeds)
-        elif self.config.mode == "physx_wheels":
-            self._apply_physx_wheels_base(vx, vy, wz, dt, drive_mode)
+        elif self._motion_backend is not None:
+            self._motion_backend.apply(self, vx, vy, wz, dt, drive_mode)
         elif self.config.mode == "physx_root_velocity" and self._articulation is not None:
             # Visual wheel rolling only.  Chassis traction comes from root velocity.
             self._apply_joint_velocity_targets(wheel_speeds)

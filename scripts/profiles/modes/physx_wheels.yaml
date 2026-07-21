@@ -1,0 +1,33 @@
+runtime:
+  enable_guard: true
+  guard_backend: voxel
+
+robot:
+  model: mecanum730_xms5_lidar_physx_wheels
+  urdf_path: /home/stardust/resources/arena_ws/src/arena/arena-isaac/ros2isaacsim/ros2isaacsim/assets/robots/unified_v25730/mecanum730_xms5_gripper_v25730.urdf
+  x: 0.0
+  y: 0.0
+  z: 0.01
+  full_asset_handoff: true
+  spawn_settling_sec: 10
+  spawn_settling_min_stable_sec: 0.3
+  spawn_settling_timeout_sec: 3.0
+  spawn_settling_max_roll_pitch_deg: 2.0
+  spawn_settling_max_lin_speed: 0.03
+  spawn_settling_max_ang_speed: 0.15
+  spawn_settling_max_z_speed: 0.02
+  full_asset_handoff_settling_sec: 0.6
+  full_asset_handoff_min_stable_sec: 0.2
+  full_asset_handoff_timeout_sec: 2.0
+
+motion:
+  smoothing_enabled: true
+  max_linear_speed: 0.8
+  max_lateral_speed: 0.5
+  max_angular_speed: 1.2
+  max_linear_accel: 0.5
+  max_lateral_accel: 0.5
+  max_angular_accel: 0.75
+  max_linear_decel: 0.8
+  max_lateral_decel: 0.8
+  max_angular_decel: 1.2
