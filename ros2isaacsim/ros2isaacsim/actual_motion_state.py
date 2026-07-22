@@ -24,6 +24,12 @@ class ActualMotionStateEstimator:
         self._yaw: Optional[float] = None
         self._time: Optional[float] = None
 
+    def reset(self) -> None:
+        """Discard the previous sample after an intentional pose discontinuity."""
+        self._position = None
+        self._yaw = None
+        self._time = None
+
     def sample(
         self,
         position: Sequence[float],

@@ -28,6 +28,16 @@ class PedestrianGuardState:
     radius: float
 
 
+@dataclass(frozen=True)
+class HardGuardResult:
+    vx: float
+    vy: float
+    wz: float
+    scale: float
+    mode: str
+    blocked_by: str | None = None
+
+
 def circle_intersects_grid_cells(
     *,
     center_xy: Sequence[float],
@@ -139,6 +149,152 @@ def pedestrian_robot_scores(ped: PedestrianGuardState, robot: RobotGuardState) -
         _circle_footprint_penetration(robot.next_pos_xy, robot.next_heading, robot, ped.next_pos_xy, ped.radius),
     )
     return current_score, next_score
+
+
+def scale_robot_command_for_pedestrians(
+    *,
+    robot: RobotGuardState,
+    pedestrians: Sequence[PedestrianGuardState],
+    vx: float,
+    vy: float,
+    wz: float,
+    horizon_sec: float,
+    sample_dt_sec: float,
+    margin_m: float = 0.0,
+    binary_iterations: int = 10,
+    escape_epsilon: float = 1e-4,
+) -> HardGuardResult:
+    """Scale a body-frame Twist only enough to avoid swept geometric overlap."""
+    if not pedestrians:
+        return HardGuardResult(float(vx), float(vy), float(wz), 1.0, "clear")
+    current_scores = [
+        _circle_footprint_penetration(
+            robot.pos_xy,
+            robot.heading,
+            robot,
+            pedestrian.pos_xy,
+            float(pedestrian.radius) + max(0.0, float(margin_m)),
+        )
+        for pedestrian in pedestrians
+    ]
+    max_current = max(current_scores, default=0.0)
+    if max_current > 0.0:
+        safe, blocked_by, final_score = _command_is_safe(
+            robot=robot,
+            pedestrians=pedestrians,
+            vx=float(vx),
+            vy=float(vy),
+            wz=float(wz),
+            horizon_sec=min(max(float(sample_dt_sec), 0.05), max(float(horizon_sec), 0.05)),
+            sample_dt_sec=float(sample_dt_sec),
+            margin_m=float(margin_m),
+            max_allowed_penetration=max_current,
+        )
+        if safe and final_score + float(escape_epsilon) < max_current:
+            return HardGuardResult(float(vx), float(vy), float(wz), 1.0, "escape")
+        return HardGuardResult(0.0, 0.0, 0.0, 0.0, "overlap_stop", blocked_by)
+
+    safe, blocked_by, _ = _command_is_safe(
+        robot=robot,
+        pedestrians=pedestrians,
+        vx=float(vx),
+        vy=float(vy),
+        wz=float(wz),
+        horizon_sec=float(horizon_sec),
+        sample_dt_sec=float(sample_dt_sec),
+        margin_m=float(margin_m),
+    )
+    if safe:
+        return HardGuardResult(float(vx), float(vy), float(wz), 1.0, "clear")
+
+    low = 0.0
+    high = 1.0
+    for _ in range(max(1, int(binary_iterations))):
+        scale = 0.5 * (low + high)
+        candidate_safe, _, _ = _command_is_safe(
+            robot=robot,
+            pedestrians=pedestrians,
+            vx=float(vx) * scale,
+            vy=float(vy) * scale,
+            wz=float(wz) * scale,
+            horizon_sec=float(horizon_sec),
+            sample_dt_sec=float(sample_dt_sec),
+            margin_m=float(margin_m),
+        )
+        if candidate_safe:
+            low = scale
+        else:
+            high = scale
+    if low <= 1e-3:
+        return HardGuardResult(0.0, 0.0, 0.0, 0.0, "blocked", blocked_by)
+    return HardGuardResult(
+        float(vx) * low,
+        float(vy) * low,
+        float(wz) * low,
+        low,
+        "scaled",
+        blocked_by,
+    )
+
+
+def _command_is_safe(
+    *,
+    robot: RobotGuardState,
+    pedestrians: Sequence[PedestrianGuardState],
+    vx: float,
+    vy: float,
+    wz: float,
+    horizon_sec: float,
+    sample_dt_sec: float,
+    margin_m: float,
+    max_allowed_penetration: float = 0.0,
+) -> tuple[bool, str | None, float]:
+    horizon = max(0.0, float(horizon_sec))
+    sample_dt = max(1e-3, float(sample_dt_sec))
+    steps = max(1, int(math.ceil(horizon / sample_dt)))
+    dt = horizon / steps if horizon > 0.0 else sample_dt
+    x, y = float(robot.pos_xy[0]), float(robot.pos_xy[1])
+    heading = float(robot.heading)
+    worst_score = 0.0
+    blocked_by = None
+    for step in range(1, steps + 1):
+        mid_heading = heading + 0.5 * float(wz) * dt
+        c = math.cos(mid_heading)
+        s = math.sin(mid_heading)
+        x += (c * float(vx) - s * float(vy)) * dt
+        y += (s * float(vx) + c * float(vy)) * dt
+        heading += float(wz) * dt
+        progress = step / steps
+        for pedestrian in pedestrians:
+            pedestrian_x = float(pedestrian.pos_xy[0]) + progress * (
+                float(pedestrian.next_pos_xy[0]) - float(pedestrian.pos_xy[0])
+            )
+            pedestrian_y = float(pedestrian.pos_xy[1]) + progress * (
+                float(pedestrian.next_pos_xy[1]) - float(pedestrian.pos_xy[1])
+            )
+            score = _circle_footprint_penetration(
+                (x, y),
+                heading,
+                robot,
+                (pedestrian_x, pedestrian_y),
+                float(pedestrian.radius) + max(0.0, float(margin_m)),
+            )
+            if score > worst_score:
+                worst_score = score
+                blocked_by = pedestrian.name
+            if score > float(max_allowed_penetration) + 1e-9:
+                return False, blocked_by, worst_score
+    final_score = max(
+        _circle_footprint_penetration(
+            (x, y),
+            heading,
+            robot,
+            pedestrian.next_pos_xy,
+            float(pedestrian.radius) + max(0.0, float(margin_m)),
+        )
+        for pedestrian in pedestrians
+    )
+    return True, blocked_by, final_score
 
 
 def _circle_footprint_penetration(

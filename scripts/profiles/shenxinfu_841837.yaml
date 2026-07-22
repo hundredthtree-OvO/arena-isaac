@@ -213,6 +213,13 @@ pedestrians:
   stop_radius_m: 0.5
   # Tight portal/recovery paths must reach bends before turning in narrow doorways.
   constrained_waypoint_radius_m: 0.08
+  robot_interaction_policy: avoid
+  physics_proxy_enabled: true
+  hard_guard_enabled: false
+  hard_guard_margin_m: 0.04
+  hard_guard_control_latency_sec: 0.10
+  hard_guard_sample_dt_sec: 0.04
+  hard_guard_pedestrian_horizon_sec: 0.35
   auto_sample: true
   voxel_map_path: /home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.voxel.json.gz
   count: 2

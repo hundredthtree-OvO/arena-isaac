@@ -55,6 +55,13 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertIn("people_extension_mode:=replicator_agent_core", joined)
         self.assertIn("enable_navmesh:=false", joined)
         self.assertEqual(env["ARENA_ISAAC_COLLISION_GUARD_BACKEND"], "none")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_ROBOT_POLICY"], "stop")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED"], "false")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"], "true")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_MARGIN_M"], "0.04")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_LATENCY_SEC"], "0.1")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_SAMPLE_DT_SEC"], "0.04")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_HORIZON_SEC"], "0.35")
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"], "restore_selected_meshes")
         self.assertEqual(
             env["ARENA_ISAAC_SCENE_DOOR_COLLISION_TARGETS"],
@@ -123,6 +130,9 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(env["ARENA_ISAAC_COLLISION_GUARD_BACKEND"], "voxel")
         self.assertEqual(env["ARENA_ISAAC_MAX_LINEAR_SPEED"], "0.8")
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"], "disabled")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_ROBOT_POLICY"], "avoid")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED"], "true")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"], "false")
 
     def test_contact_gamepad_uses_explicit_faster_limits(self):
         command = profile_module.gamepad_cmd(self.profile, "physx_diff_contact")

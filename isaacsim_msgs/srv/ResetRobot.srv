@@ -1,0 +1,6 @@
+string name
+geometry_msgs/Pose pose
+---
+bool accepted
+string message
+uint64 generation

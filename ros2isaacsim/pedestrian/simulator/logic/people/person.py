@@ -84,6 +84,20 @@ def _constrained_waypoint_radius() -> float:
     return max(0.01, value)
 
 
+def _env_enabled(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return bool(default)
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return float(default)
+
+
 class Person:
     """
     Class that implements a person in the simulation world. The person can be controlled by a controller that inherits from the PersonController class.
@@ -146,6 +160,26 @@ class Person:
         self._target_yaw = None
         self._constrain_to_path = False
         self._constrained_waypoint_radius = _constrained_waypoint_radius()
+        self._robot_interaction_policy = str(
+            os.environ.get("ARENA_ISAAC_PEDESTRIAN_ROBOT_POLICY", "avoid")
+        ).strip().lower()
+        if self._robot_interaction_policy not in {"avoid", "stop", "off"}:
+            carb.log_warn(
+                f"Unsupported pedestrian robot policy {self._robot_interaction_policy!r}; using avoid"
+            )
+            self._robot_interaction_policy = "avoid"
+        self._physics_proxy_enabled = _env_enabled(
+            "ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED",
+            True,
+        )
+        self._hard_guard_margin_m = max(
+            0.0,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_MARGIN_M", 0.04),
+        )
+        self._hard_guard_horizon_sec = max(
+            0.0,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_HORIZON_SEC", 0.0),
+        )
         self._dynamic_avoidance_default = None
         self._path_point_arrival_radius = _pedestrian_stop_radius()
 
@@ -228,6 +262,14 @@ class Person:
         self._guard_block_generation = 0
         self._guard_block_count = 0
         self._last_navigation_voxel_wait_log = 0.0
+        self._last_update_dt = 0.0
+        self._robot_yield_saved_path_points = None
+        self._robot_yield_blocked = False
+        carb.log_info(
+            f"Pedestrian interaction policy for {self._stage_prefix}: "
+            f"robot={self._robot_interaction_policy}, "
+            f"physics_proxy_enabled={self._physics_proxy_enabled}"
+        )
 
         # Add a callback to start/stop of the simulation once the play/stop button is hit
         self._world.add_timeline_callback(self._timeline_callback_name, self.sim_start_stop)
@@ -437,6 +479,11 @@ class Person:
 
         def _update_path_with_voxel_safety(*args, **kwargs):
             try:
+                if self._robot_interaction_policy == "stop":
+                    if self._behavior_robot_yield_required(navigation_manager):
+                        self._pause_behavior_path_for_robot(navigation_manager)
+                        return
+                    self._resume_behavior_path_after_robot(navigation_manager)
                 if self._constrain_to_path or not bool(getattr(navigation_manager, "dynamic_avoidance_enabled", True)):
                     self._set_guard_block_state(False)
                     return original_update_path(*args, **kwargs)
@@ -456,6 +503,38 @@ class Person:
         navigation_manager.update_target_path_progress = _update_target_path_progress_with_mode
         navigation_manager.update_path = _update_path_with_voxel_safety
         navigation_manager._arena_voxel_safety_wrapped = True
+
+    def _behavior_robot_yield_required(self, navigation_manager) -> bool:
+        targets = list(getattr(navigation_manager, "path_targets", []) or [])
+        if not targets:
+            return False
+        return not self._robot_guard_allows_motion(
+            max(float(self._last_update_dt), 1.0 / 60.0),
+            targets[0],
+        )
+
+    def _pause_behavior_path_for_robot(self, navigation_manager) -> None:
+        if self._robot_yield_saved_path_points is None:
+            self._robot_yield_saved_path_points = list(
+                getattr(navigation_manager, "path_points", []) or []
+            )
+        navigation_manager.path_points = [
+            Utils.get_character_pos(navigation_manager.character)
+        ]
+        _, agent = self._behavior_agent()
+        command = None if agent is None else getattr(agent, "current_command", None)
+        if command is not None and hasattr(command, "desired_walk_speed"):
+            command.desired_walk_speed = 0.0
+        self._robot_yield_blocked = True
+        self._set_guard_block_state(True)
+
+    def _resume_behavior_path_after_robot(self, navigation_manager) -> None:
+        if self._robot_yield_saved_path_points is None:
+            return
+        navigation_manager.path_points = self._robot_yield_saved_path_points
+        self._robot_yield_saved_path_points = None
+        self._robot_yield_blocked = False
+        self._set_guard_block_state(False)
 
     def _set_guard_block_state(self, blocked: bool, generation: int | None = None) -> None:
         if blocked:
@@ -734,8 +813,10 @@ class Person:
         if not self._ensure_animation_graph_ready():
             return
 
+        self._last_update_dt = max(0.0, float(dt))
         if self._behavior_script_enabled:
-            self._publish_robot_obstacles_to_people(dt)
+            if self._robot_interaction_policy == "avoid":
+                self._publish_robot_obstacles_to_people(dt)
             self._dispatch_behavior_commands_if_ready()
             return
 
@@ -876,7 +957,9 @@ class Person:
         if prim is None or not prim.IsValid():
             return
         try:
-            UsdPhysics.CollisionAPI.Apply(prim).CreateCollisionEnabledAttr(True).Set(bool(enabled))
+            UsdPhysics.CollisionAPI.Apply(prim).CreateCollisionEnabledAttr(True).Set(
+                bool(enabled) and self._physics_proxy_enabled
+            )
         except Exception:
             pass
 
@@ -1185,10 +1268,11 @@ class Person:
         if goal is None:
             goal = self._preview_active_goal()
         goal_xy = None if goal is None else (float(goal[0]), float(goal[1]))
+        prediction_speed = 0.0 if self._robot_yield_blocked else float(self._target_speed)
         next_pos_xy = predict_pedestrian_step(
             pos_xy=pos_xy,
             goal_xy=goal_xy,
-            speed=float(self._target_speed),
+            speed=prediction_speed,
             dt=float(max(0.0, dt)),
         )
         return PedestrianGuardState(
@@ -1205,16 +1289,23 @@ class Person:
             from isaac_utils.mecanum_teleop import mecanum_teleop_manager
         except Exception:
             return True
-        ped_state = self.get_dynamic_guard_state(dt, active_goal=active_goal)
+        prediction_dt = max(float(dt), self._hard_guard_horizon_sec)
+        ped_state = self.get_dynamic_guard_state(prediction_dt, active_goal=active_goal)
+        guarded_ped_state = PedestrianGuardState(
+            name=ped_state.name,
+            pos_xy=ped_state.pos_xy,
+            next_pos_xy=ped_state.next_pos_xy,
+            radius=float(ped_state.radius) + self._hard_guard_margin_m,
+        )
         blocked_by = None
         for robot in list(getattr(mecanum_teleop_manager, "robots", {}).values()):
             getter = getattr(robot, "get_dynamic_guard_state", None)
             if not callable(getter):
                 continue
-            robot_state = getter(dt)
+            robot_state = getter(prediction_dt)
             if robot_state is None:
                 continue
-            current_score, next_score = pedestrian_robot_scores(ped_state, robot_state)
+            current_score, next_score = pedestrian_robot_scores(guarded_ped_state, robot_state)
             if movement_allowed(current_score, next_score, escape_epsilon=self._guard_escape_epsilon):
                 continue
             blocked_by = robot_state.name
@@ -1326,7 +1417,9 @@ class Person:
         prim = capsule.GetPrim()
         imageable = UsdGeom.Imageable(prim)
         imageable.MakeInvisible()
-        UsdPhysics.CollisionAPI.Apply(prim).CreateCollisionEnabledAttr(True).Set(True)
+        UsdPhysics.CollisionAPI.Apply(prim).CreateCollisionEnabledAttr(True).Set(
+            bool(self._physics_proxy_enabled)
+        )
         try:
             UsdPhysics.RigidBodyAPI.Apply(prim)
             prim.CreateAttribute("physics:rigidBodyEnabled", Sdf.ValueTypeNames.Bool, custom=False).Set(True)

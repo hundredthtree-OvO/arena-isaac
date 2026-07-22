@@ -23,8 +23,11 @@ proxy:
 robot:
   model: mecanum730_xms5_lidar_physx_diff_contact
   urdf_path: /home/stardust/resources/arena_ws/src/arena/arena-isaac/ros2isaacsim/ros2isaacsim/assets/robots/physx_diff_contact/mecanum730_xms5_physx_diff_contact.urdf
-  x: -4.4
-  y: -1.0
+  #x: -4.4
+  #y: -1.0
+  #z: 0.03
+  x: 0.0
+  y: 0.0
   z: 0.03
   full_asset_handoff: false
   spawn_settling_sec: 1.0
@@ -36,6 +39,17 @@ arm_hold:
 gamepad:
   linear_scale: 0.4
   angular_scale: 0.8
+
+pedestrians:
+  # The animated kinematic capsule must not inject impulses into the dynamic
+  # contact robot. Robot interaction is handled by the execution-time guard.
+  robot_interaction_policy: stop
+  physics_proxy_enabled: false
+  hard_guard_enabled: true
+  hard_guard_margin_m: 0.04
+  hard_guard_control_latency_sec: 0.10
+  hard_guard_sample_dt_sec: 0.04
+  hard_guard_pedestrian_horizon_sec: 0.35
 
 motion:
   wheel_radius: 0.08

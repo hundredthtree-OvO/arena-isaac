@@ -39,6 +39,9 @@ from typing import Dict, List, Optional
 import numpy as np
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
+from isaacsim_msgs.srv import ResetRobot
+from std_msgs.msg import String
+from std_srvs.srv import SetBool
 try:
     from rosgraph_msgs.msg import Clock
 except Exception:  # pragma: no cover
@@ -74,12 +77,14 @@ try:
         RobotGuardState,
         footprint_extents,
         predict_robot_pose,
+        scale_robot_command_for_pedestrians,
     )
 except Exception:  # pragma: no cover
     from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
         RobotGuardState,
         footprint_extents,
         predict_robot_pose,
+        scale_robot_command_for_pedestrians,
     )
 from isaacsim.core.utils.stage import get_current_stage
 from pxr import Gf, Sdf, Usd, UsdGeom
@@ -647,6 +652,8 @@ class MecanumRobot:
         self.publish_static_sensor_tf = _env_bool("ARENA_ISAAC_PUBLISH_SENSOR_STATIC_TF", True)
         self._odom_pub = None
         self._applied_pub = None
+        self._hard_guard_event_pub = None
+        self._reset_status_pub = None
         self._tf_pub = None
         self._static_tf_pub = None
         self._static_tf_sent = False
@@ -663,6 +670,16 @@ class MecanumRobot:
                     if self.publish_static_sensor_tf:
                         self._static_tf_pub = StaticTransformBroadcaster(self.node)
                 self._applied_pub = self.node.create_publisher(Twist, self.applied_cmd_vel_topic, 10)
+                self._hard_guard_event_pub = self.node.create_publisher(
+                    String,
+                    "/isaac/pedestrian_hard_guard_events",
+                    10,
+                )
+                self._reset_status_pub = self.node.create_publisher(
+                    String,
+                    "/isaac/mecanum_reset_status",
+                    10,
+                )
                 if self._use_clock_topic_for_tf_stamps and Clock is not None:
                     self._clock_sub = self.node.create_subscription(Clock, "/clock", self._clock_cb, _clock_qos())
             except Exception as exc:
@@ -681,6 +698,24 @@ class MecanumRobot:
         self._applied_vy = 0.0
         self._applied_wz = 0.0
         self._last_guard_mode = "init"
+        self._pedestrian_hard_guard_enabled = _env_bool(
+            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED",
+            False,
+        )
+        self._pedestrian_hard_guard_margin_m = max(
+            0.0,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_MARGIN_M", 0.04),
+        )
+        self._pedestrian_hard_guard_latency_sec = max(
+            0.0,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_LATENCY_SEC", 0.10),
+        )
+        self._pedestrian_hard_guard_sample_dt_sec = max(
+            0.01,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_SAMPLE_DT_SEC", 0.04),
+        )
+        self._last_pedestrian_hard_guard_log = 0.0
+        self._last_pedestrian_hard_guard_event = 0.0
         self._articulation = None
         self._diff_base_link_index: Optional[int] = None
         self._last_diff_force_view_attempt = 0.0
@@ -739,6 +774,10 @@ class MecanumRobot:
         self._hold_drive_configured_paths = set()
         self._hold_gravity_configured_paths = set()
         self._last_hold_scene_constraint_time = 0.0
+        self._pending_episode_reset = None
+        self._episode_reset_generation = 0
+        self._episode_reset_requested_generation = 0
+        self._episode_control_hold = False
 
     def _clock_cb(self, msg):
         try:
@@ -769,7 +808,7 @@ class MecanumRobot:
         return _stamp_from_node(self.node)
 
     def set_cmd(self, msg: Twist):
-        if self._settling_state != "ready":
+        if self._settling_state != "ready" or self._episode_control_hold:
             return
         c = self.config
         vx = max(-c.max_linear_speed, min(c.max_linear_speed, float(msg.linear.x)))
@@ -785,7 +824,7 @@ class MecanumRobot:
 
     def set_differential_cmd(self, msg: Twist):
         """Store a gamepad command; a fresh differential command has priority."""
-        if self._settling_state != "ready":
+        if self._settling_state != "ready" or self._episode_control_hold:
             return
         c = self.config
         vx = max(-c.max_linear_speed, min(c.max_linear_speed, float(msg.linear.x)))
@@ -799,6 +838,149 @@ class MecanumRobot:
             self._log_info(
                 f"[{self.name}] differential cmd received: vx={vx:+.3f}, wz={wz:+.3f}"
             )
+
+    def set_episode_control_hold(self, enabled: bool) -> tuple[bool, str]:
+        """Gate operator commands without changing legacy motion modes."""
+        if self.config.mode != "physx_diff_contact":
+            return False, f"robot {self.name} is in mode {self.config.mode}, not physx_diff_contact"
+        enabled = bool(enabled)
+        with self._lock:
+            changed = self._episode_control_hold != enabled
+            self._episode_control_hold = enabled
+            self._clear_motion_commands_locked()
+            self._last_guard_mode = "episode_control_hold" if enabled else "episode_control_released"
+        if changed:
+            self._log_info(f"[{self.name}] episode control hold {'enabled' if enabled else 'released'}")
+        return True, f"episode control hold {'enabled' if enabled else 'released'} for {self.name}"
+
+    def request_episode_reset(self, position, orientation_wxyz) -> tuple[bool, str, int]:
+        """Queue a contact-mode reset for execution on the simulation thread."""
+        if self.config.mode != "physx_diff_contact":
+            return False, f"robot {self.name} is in mode {self.config.mode}, not physx_diff_contact", 0
+        try:
+            position = np.asarray(position, dtype=np.float32).reshape(3)
+            orientation = np.asarray(orientation_wxyz, dtype=np.float32).reshape(4)
+        except Exception as exc:
+            return False, f"invalid reset pose: {exc}", 0
+        if not np.all(np.isfinite(position)) or not np.all(np.isfinite(orientation)):
+            return False, "reset pose contains non-finite values", 0
+        norm = float(np.linalg.norm(orientation))
+        if norm <= 1.0e-6:
+            return False, "reset orientation has zero norm", 0
+        orientation /= norm
+        with self._lock:
+            self._episode_reset_requested_generation += 1
+            generation = self._episode_reset_requested_generation
+            self._pending_episode_reset = (generation, position.copy(), orientation.copy())
+            self._clear_motion_commands_locked()
+        return True, f"queued reset generation {generation} for {self.name}", generation
+
+    def _publish_reset_status(self, generation: int, status: str, message: str) -> None:
+        if self._reset_status_pub is None:
+            return
+        payload = {
+            "robot": self.name,
+            "generation": int(generation),
+            "status": str(status),
+            "message": str(message),
+            "sim_time_sec": float(self._last_clock_time_float),
+        }
+        self._reset_status_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
+
+    def _clear_motion_commands_locked(self) -> None:
+        self._vx = self._vy = self._wz = 0.0
+        self._diff_vx = self._diff_wz = 0.0
+        self._last_cmd_time = 0.0
+        self._last_diff_cmd_time = 0.0
+        self._smooth_vx = self._smooth_vy = self._smooth_wz = 0.0
+        self._applied_vx = self._applied_vy = self._applied_wz = 0.0
+        self._active_drive_mode = MECANUM_DRIVE
+        self._last_guard_mode = "episode_reset"
+
+    def _write_episode_reset_pose(self, position: np.ndarray, orientation: np.ndarray) -> bool:
+        wrote_pose = False
+        if self._articulation is not None and hasattr(self._articulation, "write_root_pose_to_sim"):
+            try:
+                values = [[
+                    float(position[0]),
+                    float(position[1]),
+                    float(position[2]),
+                    float(orientation[0]),
+                    float(orientation[1]),
+                    float(orientation[2]),
+                    float(orientation[3]),
+                ]]
+                try:
+                    import torch  # type: ignore
+
+                    root_pose = torch.tensor(values, dtype=torch.float32)
+                except Exception:
+                    root_pose = np.asarray(values, dtype=np.float32)
+                self._articulation.write_root_pose_to_sim(root_pose)
+                wrote_pose = True
+            except Exception as exc:
+                self._log_warn(f"[{self.name}] episode reset root-pose write failed: {exc}")
+        if not wrote_pose:
+            try:
+                _set_usd_xform_pose(self.prim_path, position, orientation)
+                wrote_pose = True
+            except Exception as exc:
+                self._log_warn(f"[{self.name}] episode reset USD pose fallback failed: {exc}")
+        return wrote_pose
+
+    def _apply_pending_episode_reset(self) -> bool:
+        with self._lock:
+            pending = self._pending_episode_reset
+            if pending is not None:
+                self._pending_episode_reset = None
+                self._clear_motion_commands_locked()
+        if pending is None:
+            return False
+        generation, position, orientation = pending
+        zero_wheels = np.zeros(len(self._joint_indices or []), dtype=np.float32)
+        if len(zero_wheels):
+            self._apply_joint_velocity_targets(zero_wheels)
+            try:
+                self._articulation.set_joint_velocities(
+                    velocities=single_articulation_targets(zero_wheels),
+                    joint_indices=np.asarray(self._joint_indices, dtype=np.int32),
+                )
+            except Exception:
+                try:
+                    self._articulation.set_joint_velocities(
+                        velocities=zero_wheels,
+                        joint_indices=np.asarray(self._joint_indices, dtype=np.int32),
+                    )
+                except Exception:
+                    pass
+        self._write_root_velocity_command(np.zeros(3, dtype=np.float32), np.zeros(3, dtype=np.float32))
+        if not self._write_episode_reset_pose(position, orientation):
+            message = "episode reset rejected because no pose API succeeded"
+            self._log_warn(f"[{self.name}] {message}")
+            self._publish_reset_status(generation, "failed", message)
+            return True
+        self._write_root_velocity_command(np.zeros(3, dtype=np.float32), np.zeros(3, dtype=np.float32))
+        self._actual_state_estimator.reset()
+        self._measured_vx = self._measured_vy = self._measured_wz = 0.0
+        self._physx_nominal_z = float(position[2])
+        self._motion_nominal_z = float(position[2])
+        self._kinematic_pos = position.copy()
+        self._spawn_orientation_wxyz = orientation.copy()
+        self._heading = 0.0
+        self._diff_contact_samples = []
+        self._last_diff_contact_sample_t = 0.0
+        self._episode_reset_generation = int(generation)
+        self._restart_settling_state(
+            warmup_sec=self.config.spawn_settling_sec,
+            min_stable_sec=self.config.spawn_settling_min_stable_sec,
+            timeout_sec=self.config.spawn_settling_timeout_sec,
+        )
+        self._log_info(
+            f"[{self.name}] episode reset generation {self._episode_reset_generation} applied: "
+            f"position={position.tolist()}, yaw={_quat_wxyz_to_yaw(orientation):.3f}; entering settling"
+        )
+        self._publish_reset_status(generation, "applied", "pose and zero velocity written; settling started")
+        return True
 
     def _log_info(self, text: str):
         if self.logger:
@@ -1166,9 +1348,19 @@ class MecanumRobot:
                 footprint_right=cfg.footprint_right,
             )
         return footprint_extents(
-            length=2.0 * float(self.config.half_length),
-            width=2.0 * float(self.config.half_width),
-            margin=0.05,
+            length=_env_float(
+                "ARENA_ISAAC_COLLISION_GUARD_LENGTH",
+                2.0 * float(self.config.half_length),
+            ),
+            width=_env_float(
+                "ARENA_ISAAC_COLLISION_GUARD_WIDTH",
+                2.0 * float(self.config.half_width),
+            ),
+            margin=_env_float("ARENA_ISAAC_COLLISION_GUARD_MARGIN", 0.05),
+            footprint_forward=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_FORWARD", -1.0),
+            footprint_rear=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_REAR", -1.0),
+            footprint_left=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_LEFT", -1.0),
+            footprint_right=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_RIGHT", -1.0),
         )
 
     def _current_guard_pose(self):
@@ -1209,8 +1401,102 @@ class MecanumRobot:
             right=right,
         )
 
+    def _pedestrian_hard_guard_horizon(self, vx: float, vy: float, wz: float) -> float:
+        linear_time = max(
+            abs(float(vx)) / max(float(self.config.max_linear_decel), 1e-3),
+            abs(float(vy)) / max(float(self.config.max_lateral_decel), 1e-3),
+        )
+        angular_time = abs(float(wz)) / max(float(self.config.max_angular_decel), 1e-3)
+        return max(
+            self._pedestrian_hard_guard_sample_dt_sec,
+            self._pedestrian_hard_guard_latency_sec + max(linear_time, angular_time),
+        )
+
+    def _active_pedestrian_guard_states(self, horizon_sec: float):
+        try:
+            from pedestrian.simulator.logic.people_manager import PeopleManager
+        except Exception:
+            return []
+        states = []
+        seen = set()
+        for person in list(PeopleManager.get_people_manager().people.values()):
+            identity = id(person)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            if not bool(getattr(person, "_active", False)):
+                continue
+            if bool(getattr(person, "is_parked", False)):
+                continue
+            if not bool(getattr(person, "_pose_valid", False)):
+                continue
+            getter = getattr(person, "get_dynamic_guard_state", None)
+            if not callable(getter):
+                continue
+            state = getter(float(horizon_sec))
+            if state is not None:
+                states.append(state)
+        return states
+
+    def _apply_pedestrian_hard_guard(
+        self,
+        vx: float,
+        vy: float,
+        wz: float,
+    ) -> tuple[float, float, float]:
+        if not self._pedestrian_hard_guard_enabled:
+            return float(vx), float(vy), float(wz)
+        horizon = self._pedestrian_hard_guard_horizon(vx, vy, wz)
+        pedestrians = self._active_pedestrian_guard_states(horizon)
+        if not pedestrians:
+            return float(vx), float(vy), float(wz)
+        robot_state = self.get_dynamic_guard_state(0.0)
+        if robot_state is None:
+            return float(vx), float(vy), float(wz)
+        result = scale_robot_command_for_pedestrians(
+            robot=robot_state,
+            pedestrians=pedestrians,
+            vx=float(vx),
+            vy=float(vy),
+            wz=float(wz),
+            horizon_sec=horizon,
+            sample_dt_sec=self._pedestrian_hard_guard_sample_dt_sec,
+            margin_m=self._pedestrian_hard_guard_margin_m,
+        )
+        self._last_guard_mode = f"pedestrian_{result.mode}"
+        if result.scale < 0.999:
+            now = time.monotonic()
+            if self._hard_guard_event_pub is not None and now - self._last_pedestrian_hard_guard_event >= 0.1:
+                self._last_pedestrian_hard_guard_event = now
+                event = {
+                    "event": "hard_guard_intervention",
+                    "robot": self.name,
+                    "mode": result.mode,
+                    "scale": float(result.scale),
+                    "blocked_by": result.blocked_by,
+                    "input": {"vx": float(vx), "vy": float(vy), "wz": float(wz)},
+                    "applied": {
+                        "vx": float(result.vx),
+                        "vy": float(result.vy),
+                        "wz": float(result.wz),
+                    },
+                    "horizon_sec": float(horizon),
+                    "sim_time_sec": float(self._last_clock_time_float),
+                }
+                self._hard_guard_event_pub.publish(String(data=json.dumps(event, sort_keys=True)))
+            if now - self._last_pedestrian_hard_guard_log >= 0.5:
+                self._last_pedestrian_hard_guard_log = now
+                self._log_warn(
+                    f"[{self.name}] pedestrian hard guard {result.mode}: "
+                    f"scale={result.scale:.3f}, blocked_by={result.blocked_by}, "
+                    f"horizon={horizon:.2f}s"
+                )
+        return result.vx, result.vy, result.wz
+
     def _selected_cmd(self):
         with self._lock:
+            if self._episode_control_hold:
+                return 0.0, 0.0, 0.0, DIFFERENTIAL_DRIVE
             now = time.monotonic()
             if now - self._last_diff_cmd_time <= self.config.differential_timeout_sec:
                 return self._diff_vx, 0.0, self._diff_wz, DIFFERENTIAL_DRIVE
@@ -2252,6 +2538,9 @@ class MecanumRobot:
     def update(self):
         if not self._ensure_initialized():
             return
+        if self._apply_pending_episode_reset():
+            self._last_update_time = time.monotonic()
+            return
         now = time.monotonic()
         if self._last_update_time is None:
             self._last_update_time = now
@@ -2272,6 +2561,11 @@ class MecanumRobot:
         if drive_mode == DIFFERENTIAL_DRIVE:
             vy = 0.0
             self._smooth_vy = 0.0
+        vx, vy, wz = self._apply_pedestrian_hard_guard(vx, vy, wz)
+        if self._pedestrian_hard_guard_enabled:
+            self._smooth_vx = float(vx)
+            self._smooth_vy = float(vy)
+            self._smooth_wz = float(wz)
         wheel_speeds = self._wheel_speeds(vx, vy, wz, drive_mode)
 
         if self.config.mode != "joint":
@@ -2296,9 +2590,54 @@ class MecanumTeleopManager:
         self.node = None
         self.robots: Dict[str, MecanumRobot] = {}
         self.subscriptions = []
+        self._reset_service = None
+        self._control_hold_service = None
 
     def register_node(self, node):
         self.node = node
+        if self._reset_service is None:
+            self._reset_service = node.create_service(
+                ResetRobot,
+                "/isaac/reset_mecanum_episode",
+                self._reset_robot_callback,
+            )
+        if self._control_hold_service is None:
+            self._control_hold_service = node.create_service(
+                SetBool,
+                "/isaac/set_mecanum_control_hold",
+                self._control_hold_callback,
+            )
+
+    def _control_hold_callback(self, request, response):
+        if len(self.robots) != 1:
+            response.success = False
+            response.message = f"control hold requires exactly one registered robot; found {len(self.robots)}"
+            return response
+        robot = next(iter(self.robots.values()))
+        success, message = robot.set_episode_control_hold(bool(request.data))
+        response.success = bool(success)
+        response.message = str(message)
+        return response
+
+    def _reset_robot_callback(self, request, response):
+        name = str(getattr(request, "name", "") or "").strip()
+        robot = self.robots.get(name)
+        if robot is None and not name and len(self.robots) == 1:
+            robot = next(iter(self.robots.values()))
+        if robot is None:
+            response.accepted = False
+            response.message = f"unknown mecanum robot: {name or '<empty>'}"
+            response.generation = 0
+            return response
+        pose = request.pose
+        accepted, message, generation = robot.request_episode_reset(
+            [pose.position.x, pose.position.y, pose.position.z],
+            [pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z],
+        )
+        response.accepted = bool(accepted)
+        response.message = str(message)
+        response.generation = int(generation)
+        return response
 
     def add_robot(
         self,

@@ -110,7 +110,7 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     guard = _phase_section(profile, phase, "guard")
     collision2d = profile.get("collision2d", {})
     voxel = profile.get("voxel", {})
-    pedestrians = profile.get("pedestrians", {})
+    pedestrians = _phase_section(profile, phase, "pedestrians")
     robot = _phase_section(profile, phase, "robot")
     robot_geometry = _phase_section(profile, phase, "robot_geometry")
     lidar = _phase_section(profile, phase, "lidar")
@@ -190,6 +190,26 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         env["ARENA_ISAAC_CONSTRAINED_WAYPOINT_RADIUS_M"] = str(
             pedestrians.get("constrained_waypoint_radius_m")
         )
+    if pedestrians.get("robot_interaction_policy") is not None:
+        env["ARENA_ISAAC_PEDESTRIAN_ROBOT_POLICY"] = str(
+            pedestrians.get("robot_interaction_policy")
+        )
+    if pedestrians.get("physics_proxy_enabled") is not None:
+        env["ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED"] = (
+            "true" if bool(pedestrians.get("physics_proxy_enabled")) else "false"
+        )
+    if pedestrians.get("hard_guard_enabled") is not None:
+        env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"] = (
+            "true" if bool(pedestrians.get("hard_guard_enabled")) else "false"
+        )
+    for key, env_name in (
+        ("hard_guard_margin_m", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_MARGIN_M"),
+        ("hard_guard_control_latency_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_LATENCY_SEC"),
+        ("hard_guard_sample_dt_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_SAMPLE_DT_SEC"),
+        ("hard_guard_pedestrian_horizon_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_HORIZON_SEC"),
+    ):
+        if pedestrians.get(key) is not None:
+            env[env_name] = str(pedestrians.get(key))
 
 
     # V16 robot geometry / lidar / actual odom-tf settings.  These are consumed

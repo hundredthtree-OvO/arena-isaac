@@ -31,6 +31,16 @@ class TestMotionBackendBoundaries(unittest.TestCase):
         self.assertAlmostEqual(moved.wz, 0.0, places=6)
         np.testing.assert_allclose(moved.position, [0.0, 2.0, 0.0])
 
+    def test_actual_state_estimator_reset_hides_episode_teleport_velocity(self):
+        estimator = ActualMotionStateEstimator()
+        identity = [1.0, 0.0, 0.0, 0.0]
+
+        estimator.sample([0.0, 0.0, 0.0], identity, now=10.0)
+        estimator.reset()
+        reset_pose = estimator.sample([4.0, -1.0, 0.03], identity, now=10.1)
+
+        self.assertEqual((reset_pose.vx, reset_pose.vy, reset_pose.wz), (0.0, 0.0, 0.0))
+
 
 if __name__ == "__main__":
     unittest.main()
