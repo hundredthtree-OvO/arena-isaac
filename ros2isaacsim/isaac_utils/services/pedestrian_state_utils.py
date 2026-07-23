@@ -34,6 +34,7 @@ def pedestrian_state_tagnames() -> tuple[str, ...]:
         "guard_blocked",
         "guard_block_generation",
         "guard_block_count",
+        "guard_block_reason",
     )
 
 
@@ -41,6 +42,7 @@ def pedestrian_state_tags(person) -> list[str]:
     guard_blocked = bool(getattr(person, "_guard_blocked", False))
     guard_block_generation = getattr(person, "_guard_block_generation", 0) if guard_blocked else 0
     guard_block_count = getattr(person, "_guard_block_count", 0) if guard_blocked else 0
+    guard_block_reason = getattr(person, "_guard_block_reason", "") if guard_blocked else ""
     pose_valid = bool(getattr(person, "_pose_valid", False))
     return [
         str(getattr(person, "_stage_prefix", "") or ""),
@@ -51,4 +53,5 @@ def pedestrian_state_tags(person) -> list[str]:
         "true" if guard_blocked else "false",
         str(guard_block_generation),
         str(guard_block_count),
+        str(guard_block_reason),
     ]

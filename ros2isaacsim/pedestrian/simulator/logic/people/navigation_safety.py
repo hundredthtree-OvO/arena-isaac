@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Sequence
 
 
 @dataclass(frozen=True)
@@ -14,6 +14,50 @@ class LateralAvoidanceCandidate:
     label: str
     point_xyz: tuple[float, float, float]
     is_safe: bool
+
+
+def active_polyline_goal(
+    points: Sequence[Sequence[float]],
+    current_position: Sequence[float],
+) -> tuple[float, float, float] | None:
+    """Return the forward endpoint of the path segment nearest the root pose."""
+    parsed = [
+        (float(point[0]), float(point[1]), float(point[2]))
+        for point in points
+        if len(point) >= 3
+    ]
+    if not parsed:
+        return None
+    if len(parsed) == 1:
+        return parsed[0]
+
+    current_x = float(current_position[0])
+    current_y = float(current_position[1])
+    best_distance = math.inf
+    best_index = 0
+    for index, (start, end) in enumerate(zip(parsed, parsed[1:])):
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length_sq = dx * dx + dy * dy
+        if length_sq <= 1e-12:
+            continue
+        progress = max(
+            0.0,
+            min(
+                1.0,
+                ((current_x - start[0]) * dx + (current_y - start[1]) * dy)
+                / length_sq,
+            ),
+        )
+        projection_x = start[0] + progress * dx
+        projection_y = start[1] + progress * dy
+        distance = math.hypot(current_x - projection_x, current_y - projection_y)
+        if distance < best_distance - 1e-9 or (
+            abs(distance - best_distance) <= 1e-9 and index > best_index
+        ):
+            best_distance = distance
+            best_index = index
+    return parsed[min(best_index + 1, len(parsed) - 1)]
 
 
 def path_target_progress_radius(

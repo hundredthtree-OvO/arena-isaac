@@ -162,6 +162,37 @@ class TestDynamicActorGuard(unittest.TestCase):
 
         self.assertEqual(result.mode, "overlap_stop")
 
+    def test_margin_only_contact_allows_non_deepening_reverse_motion(self):
+        result = scale_robot_command_for_pedestrians(
+            robot=self._robot(),
+            pedestrians=[self._ped(pos_xy=(0.0, 0.54))],
+            vx=-0.08,
+            vy=0.0,
+            wz=0.0,
+            horizon_sec=0.35,
+            sample_dt_sec=0.04,
+            margin_m=0.04,
+            overlap_deadband_m=0.015,
+        )
+
+        self.assertEqual(result.mode, "margin_escape")
+        self.assertEqual(result.vx, -0.08)
+
+    def test_true_overlap_still_rejects_tangential_motion_with_margin(self):
+        result = scale_robot_command_for_pedestrians(
+            robot=self._robot(),
+            pedestrians=[self._ped(pos_xy=(0.0, 0.50))],
+            vx=-0.08,
+            vy=0.0,
+            wz=0.0,
+            horizon_sec=0.35,
+            sample_dt_sec=0.04,
+            margin_m=0.04,
+            overlap_deadband_m=0.015,
+        )
+
+        self.assertEqual(result.mode, "overlap_stop")
+
     def test_circle_grid_collision_is_not_orientation_dependent(self):
         occupied = {(0, 0)}
 

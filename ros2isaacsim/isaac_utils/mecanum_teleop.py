@@ -1484,7 +1484,20 @@ class MecanumRobot:
         )
         now = time.monotonic()
         self._last_guard_mode = f"pedestrian_{result.mode}"
-        if result.scale < 0.999:
+        command_modified = any(
+            abs(applied - requested) > 1e-6
+            for applied, requested in (
+                (float(result.vx), float(vx)),
+                (float(result.vy), float(vy)),
+                (float(result.wz), float(wz)),
+            )
+        )
+        requested_motion = (
+            abs(float(vx)) > 1e-6
+            or abs(float(vy)) > 1e-6
+            or abs(float(wz)) > 1e-6
+        )
+        if command_modified or (result.scale < 0.999 and requested_motion):
             if self._hard_guard_event_pub is not None and now - self._last_pedestrian_hard_guard_event >= 0.1:
                 self._last_pedestrian_hard_guard_event = now
                 event = {

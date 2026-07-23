@@ -18,6 +18,7 @@ assert SPEC.loader is not None
 sys.modules[SPEC.name] = NAVIGATION_SAFETY
 SPEC.loader.exec_module(NAVIGATION_SAFETY)
 LateralAvoidanceCandidate = NAVIGATION_SAFETY.LateralAvoidanceCandidate
+active_polyline_goal = NAVIGATION_SAFETY.active_polyline_goal
 path_target_progress_radius = NAVIGATION_SAFETY.path_target_progress_radius
 segment_is_safe = NAVIGATION_SAFETY.segment_is_safe
 select_safe_lateral_avoidance_choice = NAVIGATION_SAFETY.select_safe_lateral_avoidance_choice
@@ -25,6 +26,27 @@ terminal_semantic_approach_radius = NAVIGATION_SAFETY.terminal_semantic_approach
 
 
 class TestNavigationSafety(unittest.TestCase):
+    def test_active_polyline_goal_uses_segment_near_current_root(self):
+        goal = active_polyline_goal(
+            [
+                (-1.675, -0.225, 0.0),
+                (0.075, 0.675, 0.0),
+                (2.075, 0.675, 0.0),
+                (2.875, 0.875, 0.0),
+            ],
+            (1.14, 0.73, 0.0),
+        )
+
+        self.assertEqual(goal, (2.075, 0.675, 0.0))
+
+    def test_active_polyline_goal_advances_at_shared_waypoint(self):
+        goal = active_polyline_goal(
+            [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0)],
+            (1.0, 0.0, 0.0),
+        )
+
+        self.assertEqual(goal, (1.0, 1.0, 0.0))
+
     def test_constrained_path_uses_tight_intermediate_but_normal_final_radius(self):
         common = {
             "constrain_to_path": True,

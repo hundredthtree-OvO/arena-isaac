@@ -213,17 +213,17 @@ def scale_robot_command_for_pedestrians(
     """Scale a body-frame Twist only enough to avoid swept geometric overlap."""
     if not pedestrians:
         return HardGuardResult(float(vx), float(vy), float(wz), 1.0, "clear")
-    current_scores = [
+    physical_scores = [
         _circle_footprint_penetration(
             robot.pos_xy,
             robot.heading,
             robot,
             pedestrian.pos_xy,
-            float(pedestrian.radius) + max(0.0, float(margin_m)),
+            float(pedestrian.radius),
         )
         for pedestrian in pedestrians
     ]
-    max_current = max(current_scores, default=0.0)
+    max_current = max(physical_scores, default=0.0)
     if max_current > 0.0:
         escape_horizon = float(overlap_escape_horizon_sec)
         if escape_horizon <= 0.0:
@@ -252,7 +252,7 @@ def scale_robot_command_for_pedestrians(
                 wz=candidate_wz,
                 horizon_sec=escape_horizon,
                 sample_dt_sec=float(sample_dt_sec),
-                margin_m=float(margin_m),
+                margin_m=0.0,
                 max_allowed_penetration=(
                     max_current + max(0.0, float(overlap_deadband_m))
                 ),
@@ -267,6 +267,55 @@ def scale_robot_command_for_pedestrians(
                     "escape",
                 )
         return HardGuardResult(0.0, 0.0, 0.0, 0.0, "overlap_stop", blocked_by)
+
+    inflated_scores = [
+        _circle_footprint_penetration(
+            robot.pos_xy,
+            robot.heading,
+            robot,
+            pedestrian.pos_xy,
+            float(pedestrian.radius) + max(0.0, float(margin_m)),
+        )
+        for pedestrian in pedestrians
+    ]
+    max_inflated_current = max(inflated_scores, default=0.0)
+    if max_inflated_current > 0.0:
+        margin_candidates = [
+            (float(vx), float(vy), float(wz)),
+            (float(vx), float(vy), 0.0),
+            (0.0, 0.0, float(wz)),
+        ]
+        blocked_by = None
+        for candidate_vx, candidate_vy, candidate_wz in margin_candidates:
+            if (
+                abs(candidate_vx) <= 1e-9
+                and abs(candidate_vy) <= 1e-9
+                and abs(candidate_wz) <= 1e-9
+            ):
+                continue
+            safe, candidate_blocked_by, final_score = _command_is_safe(
+                robot=robot,
+                pedestrians=pedestrians,
+                vx=candidate_vx,
+                vy=candidate_vy,
+                wz=candidate_wz,
+                horizon_sec=float(horizon_sec),
+                sample_dt_sec=float(sample_dt_sec),
+                margin_m=float(margin_m),
+                max_allowed_penetration=(
+                    max_inflated_current + max(0.0, float(overlap_deadband_m))
+                ),
+            )
+            blocked_by = candidate_blocked_by or blocked_by
+            if safe and final_score <= max_inflated_current + float(escape_epsilon):
+                return HardGuardResult(
+                    candidate_vx,
+                    candidate_vy,
+                    candidate_wz,
+                    1.0,
+                    "margin_escape",
+                )
+        return HardGuardResult(0.0, 0.0, 0.0, 0.0, "margin_stop", blocked_by)
 
     safe, blocked_by, _ = _command_is_safe(
         robot=robot,

@@ -32,6 +32,7 @@ class _DummyPerson:
         guard_blocked=False,
         guard_block_generation=0,
         guard_block_count=0,
+        guard_block_reason="",
         active=True,
         parked=False,
     ):
@@ -44,6 +45,7 @@ class _DummyPerson:
         self._guard_blocked = guard_blocked
         self._guard_block_generation = guard_block_generation
         self._guard_block_count = guard_block_count
+        self._guard_block_reason = guard_block_reason
         self._active = active
         self.is_parked = parked
 
@@ -82,6 +84,7 @@ class TestPedestrianStateUtils(unittest.TestCase):
             guard_blocked=True,
             guard_block_generation=7,
             guard_block_count=3,
+            guard_block_reason="robot",
         )
         self.assertEqual(
             pedestrian_state_tagnames(),
@@ -94,6 +97,7 @@ class TestPedestrianStateUtils(unittest.TestCase):
                 "guard_blocked",
                 "guard_block_generation",
                 "guard_block_count",
+                "guard_block_reason",
             ),
         )
         self.assertEqual(
@@ -107,6 +111,7 @@ class TestPedestrianStateUtils(unittest.TestCase):
                 "true",
                 "7",
                 "3",
+                "robot",
             ],
         )
 

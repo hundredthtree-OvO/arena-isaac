@@ -39,6 +39,7 @@ from pedestrian.simulator.logic.people.person_controller import PersonController
 from pedestrian.simulator.logic.people_manager import PeopleManager
 from pedestrian.simulator.logic.people.navigation_safety import (
     LateralAvoidanceCandidate,
+    active_polyline_goal,
     path_target_progress_radius,
     segment_is_safe,
     select_safe_lateral_avoidance_choice,
@@ -269,6 +270,7 @@ class Person:
         self._guard_blocked = False
         self._guard_block_generation = 0
         self._guard_block_count = 0
+        self._guard_block_reason = ""
         self._last_navigation_voxel_wait_log = 0.0
         self._last_update_dt = 0.0
         self._robot_yield_saved_path_points = None
@@ -516,11 +518,14 @@ class Person:
 
     def _behavior_robot_yield_required(self, navigation_manager) -> bool:
         targets = list(getattr(navigation_manager, "path_targets", []) or [])
-        if not targets:
+        active_goal = self._preview_active_goal()
+        if active_goal is None and targets:
+            active_goal = targets[0]
+        if active_goal is None:
             return False
         return not self._robot_guard_allows_motion(
             max(float(self._last_update_dt), 1.0 / 60.0),
-            targets[0],
+            active_goal,
         )
 
     def _pause_behavior_path_for_robot(self, navigation_manager) -> None:
@@ -536,7 +541,7 @@ class Person:
         if command is not None and hasattr(command, "desired_walk_speed"):
             command.desired_walk_speed = 0.0
         self._robot_yield_blocked = True
-        self._set_guard_block_state(True)
+        self._set_guard_block_state(True, reason="robot")
 
     def _resume_behavior_path_after_robot(self, navigation_manager) -> None:
         if self._robot_yield_saved_path_points is None:
@@ -546,7 +551,12 @@ class Person:
         self._robot_yield_blocked = False
         self._set_guard_block_state(False)
 
-    def _set_guard_block_state(self, blocked: bool, generation: int | None = None) -> None:
+    def _set_guard_block_state(
+        self,
+        blocked: bool,
+        generation: int | None = None,
+        reason: str | None = None,
+    ) -> None:
         if blocked:
             if generation is None:
                 generation = int(self._motion_command_generation)
@@ -555,10 +565,12 @@ class Person:
             self._guard_blocked = True
             self._guard_block_generation = int(generation)
             self._guard_block_count += 1
+            self._guard_block_reason = str(reason or self._guard_block_reason or "unknown")
             return
         self._guard_blocked = False
         self._guard_block_generation = 0
         self._guard_block_count = 0
+        self._guard_block_reason = ""
 
     def _static_pose_check(self, position) -> tuple[bool, str | None]:
         guard = self._static_voxel_guard
@@ -701,7 +713,7 @@ class Person:
             ),
         )
         if selected is None:
-            self._set_guard_block_state(True)
+            self._set_guard_block_state(True, reason="static_voxel")
             if float(time.monotonic()) - float(self._last_navigation_voxel_wait_log) >= 0.5:
                 self._last_navigation_voxel_wait_log = float(time.monotonic())
                 blocked_obstacle = left_obstacle if not left_safe else right_obstacle if not right_safe else None
@@ -998,6 +1010,7 @@ class Person:
         self.set_direct_pose(position, yaw=float(yaw), stop=True)
         self._guard_blocked = False
         self._guard_block_count = 0
+        self._guard_block_reason = ""
         self._last_walk_speed = None
         try:
             if self.prim is not None and self.prim.IsValid():
@@ -1221,9 +1234,27 @@ class Person:
             )
             return
 
+        robot_blocker = self._candidate_robot_pose_blocker(pose[0])
+        if robot_blocker is not None:
+            _, agent = self._behavior_agent()
+            navigation_manager = None if agent is None else getattr(agent, "navigation_manager", None)
+            if navigation_manager is not None:
+                self._pause_behavior_path_for_robot(navigation_manager)
+            else:
+                self._set_guard_block_state(True, reason="robot")
+            self._restore_last_safe_pose()
+            now = time.monotonic()
+            if now - self._last_guard_block_log >= 0.5:
+                self._last_guard_block_log = now
+                carb.log_warn(
+                    f"Rejected pedestrian root motion into robot {robot_blocker} for "
+                    f"{self._stage_prefix}; restored last safe pose."
+                )
+            return
+
         collides, obstacle = self._static_pose_collides(pose[0], pose[1])
         if collides and not self._is_terminal_semantic_approach(pose[0]):
-            self._set_guard_block_state(True)
+            self._set_guard_block_state(True, reason="static_voxel")
             now = time.monotonic()
             if now - self._last_static_guard_warn >= 2.0:
                 self._last_static_guard_warn = now
@@ -1244,6 +1275,69 @@ class Person:
         if self._controller:
             self._controller.update_state(self._state)
 
+    def _candidate_robot_pose_blocker(self, candidate_position) -> str | None:
+        if self._robot_interaction_policy != "stop":
+            return None
+        try:
+            from isaac_utils.mecanum_teleop import mecanum_teleop_manager
+        except Exception:
+            return None
+        pedestrian = PedestrianGuardState(
+            name=str(self._stage_prefix or self._requested_stage_name),
+            pos_xy=(
+                float(self._state.position[0]),
+                float(self._state.position[1]),
+            ),
+            next_pos_xy=(
+                float(candidate_position[0]),
+                float(candidate_position[1]),
+            ),
+            radius=float(Person.collision_proxy_radius),
+        )
+        for robot in list(getattr(mecanum_teleop_manager, "robots", {}).values()):
+            getter = getattr(robot, "get_dynamic_guard_state", None)
+            if not callable(getter):
+                continue
+            robot_state = getter(0.0)
+            if robot_state is None:
+                continue
+            current_score, next_score = pedestrian_robot_scores(pedestrian, robot_state)
+            if movement_allowed(
+                current_score,
+                next_score,
+                escape_epsilon=self._guard_escape_epsilon,
+            ):
+                continue
+            return str(robot_state.name)
+        return None
+
+    def _restore_last_safe_pose(self) -> None:
+        position = np.array(self._state.position, dtype=float).reshape(3)
+        orientation = np.array(self._state.orientation, dtype=float).reshape(4)
+        yaw = float(Rotation.from_quat(orientation).as_euler("xyz")[2])
+        self._set_stage_root_pose(position, yaw)
+        if self.character_graph is not None:
+            try:
+                self.character_graph.set_world_transform(
+                    carb.Float3(
+                        float(position[0]),
+                        float(position[1]),
+                        float(position[2]),
+                    ),
+                    carb.Float4(
+                        float(orientation[0]),
+                        float(orientation[1]),
+                        float(orientation[2]),
+                        float(orientation[3]),
+                    ),
+                )
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to restore safe AnimGraph pose for {self._stage_prefix}: {exc}"
+                )
+        self._pose_valid = True
+        self._update_collision_proxy()
+
     def _stage_prim_is_valid(self):
         if self.prim is None or not self.prim.IsValid():
             return False
@@ -1255,6 +1349,12 @@ class Person:
     def _preview_active_goal(self):
         if self._num_path_points <= 0:
             return None
+        if self._behavior_script_enabled:
+            goal = active_polyline_goal(
+                self._target_position,
+                self._state.position,
+            )
+            return None if goal is None else np.array(goal, dtype=float)
         if self._current_point_index < 0 or self._current_point_index >= self._num_path_points:
             return None
         index_point = int(self._current_point_index)
