@@ -75,9 +75,25 @@ class TestDynamicActorGuard(unittest.TestCase):
             sample_dt_sec=0.05,
             margin_m=0.03,
         )
-        self.assertIn(result.mode, {"scaled", "blocked"})
+        self.assertIn(result.mode, {"linear_scaled", "scaled", "blocked"})
         self.assertLess(result.scale, 1.0)
         self.assertEqual(result.blocked_by, "ped")
+
+    def test_hard_guard_preserves_safe_escape_translation_when_turning_is_unsafe(self):
+        result = scale_robot_command_for_pedestrians(
+            robot=self._robot(),
+            pedestrians=[self._ped(pos_xy=(-0.3, 0.6))],
+            vx=0.4,
+            vy=0.0,
+            wz=-1.0,
+            horizon_sec=0.6,
+            sample_dt_sec=0.03,
+            margin_m=0.03,
+        )
+
+        self.assertEqual(result.mode, "angular_scaled")
+        self.assertEqual(result.vx, 0.4)
+        self.assertGreater(result.wz, -1.0)
 
     def test_overlap_only_allows_strict_escape(self):
         robot = self._robot()
@@ -246,6 +262,41 @@ class TestDynamicActorGuard(unittest.TestCase):
         self.assertEqual(current_score, 0.0)
         self.assertGreater(next_score, 0.0)
         self.assertFalse(movement_allowed(current_score, next_score))
+
+    def test_pedestrian_side_crossing_detects_swept_overlap(self):
+        robot = self._robot()
+        ped = PedestrianGuardState(
+            name="ped",
+            pos_xy=(0.0, -0.8),
+            next_pos_xy=(0.0, 0.8),
+            radius=0.22,
+        )
+
+        current_score, swept_score = pedestrian_robot_scores(ped, robot)
+
+        self.assertEqual(current_score, 0.0)
+        self.assertGreater(swept_score, 0.0)
+        self.assertFalse(movement_allowed(current_score, swept_score))
+
+    def test_overlap_uses_translation_component_when_combined_turn_cannot_escape(self):
+        robot = self._robot()
+        pedestrian = self._ped(pos_xy=(0.38, 0.42))
+
+        result = scale_robot_command_for_pedestrians(
+            robot=robot,
+            pedestrians=[pedestrian],
+            vx=-0.15,
+            vy=0.0,
+            wz=1.0,
+            horizon_sec=0.8,
+            sample_dt_sec=0.04,
+            overlap_escape_horizon_sec=0.35,
+            overlap_deadband_m=0.015,
+        )
+
+        self.assertEqual(result.mode, "escape")
+        self.assertEqual(result.vx, -0.15)
+        self.assertEqual(result.wz, 0.0)
 
 
 if __name__ == "__main__":

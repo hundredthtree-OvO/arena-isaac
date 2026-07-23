@@ -74,7 +74,6 @@ except Exception:  # pragma: no cover - imported inside Isaac Sim normally
     collision_guard_config_from_env = None  # type: ignore
 try:
     from isaac_utils.dynamic_actor_guard import (
-        HardGuardResult,
         RobotGuardState,
         footprint_extents,
         predict_robot_pose,
@@ -82,7 +81,6 @@ try:
     )
 except Exception:  # pragma: no cover
     from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
-        HardGuardResult,
         RobotGuardState,
         footprint_extents,
         predict_robot_pose,
@@ -716,14 +714,6 @@ class MecanumRobot:
             0.01,
             _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_SAMPLE_DT_SEC", 0.04),
         )
-        self._pedestrian_hard_guard_release_margin_m = max(
-            0.0,
-            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_MARGIN_M", 0.0),
-        )
-        self._pedestrian_hard_guard_release_hold_sec = max(
-            0.0,
-            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC", 0.0),
-        )
         self._pedestrian_hard_guard_escape_horizon_sec = max(
             0.0,
             _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC", 0.0),
@@ -732,9 +722,6 @@ class MecanumRobot:
             0.0,
             _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M", 0.0),
         )
-        self._pedestrian_guard_latched = False
-        self._pedestrian_guard_clear_since = 0.0
-        self._pedestrian_guard_blocked_by = None
         self._last_pedestrian_hard_guard_log = 0.0
         self._last_pedestrian_hard_guard_event = 0.0
         self._articulation = None
@@ -1479,9 +1466,6 @@ class MecanumRobot:
         horizon = self._pedestrian_hard_guard_horizon(vx, vy, wz)
         pedestrians = self._active_pedestrian_guard_states(horizon)
         if not pedestrians:
-            self._pedestrian_guard_latched = False
-            self._pedestrian_guard_clear_since = 0.0
-            self._pedestrian_guard_blocked_by = None
             return float(vx), float(vy), float(wz)
         robot_state = self.get_dynamic_guard_state(0.0)
         if robot_state is None:
@@ -1499,56 +1483,6 @@ class MecanumRobot:
             overlap_deadband_m=self._pedestrian_hard_guard_overlap_deadband_m,
         )
         now = time.monotonic()
-        if result.mode == "escape":
-            self._pedestrian_guard_latched = True
-            self._pedestrian_guard_clear_since = 0.0
-            self._pedestrian_guard_blocked_by = result.blocked_by
-        elif result.scale < 0.999:
-            self._pedestrian_guard_latched = True
-            self._pedestrian_guard_clear_since = 0.0
-            self._pedestrian_guard_blocked_by = result.blocked_by
-        elif self._pedestrian_guard_latched:
-            release_result = scale_robot_command_for_pedestrians(
-                robot=robot_state,
-                pedestrians=pedestrians,
-                vx=float(vx),
-                vy=float(vy),
-                wz=float(wz),
-                horizon_sec=horizon,
-                sample_dt_sec=self._pedestrian_hard_guard_sample_dt_sec,
-                margin_m=(
-                    self._pedestrian_hard_guard_margin_m
-                    + self._pedestrian_hard_guard_release_margin_m
-                ),
-                overlap_escape_horizon_sec=self._pedestrian_hard_guard_escape_horizon_sec,
-                overlap_deadband_m=self._pedestrian_hard_guard_overlap_deadband_m,
-            )
-            if release_result.mode != "clear":
-                result = release_result
-                self._pedestrian_guard_clear_since = 0.0
-            elif self._pedestrian_guard_clear_since <= 0.0:
-                self._pedestrian_guard_clear_since = float(now)
-                result = HardGuardResult(
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    "release_hold",
-                    self._pedestrian_guard_blocked_by,
-                )
-            elif now - self._pedestrian_guard_clear_since < self._pedestrian_hard_guard_release_hold_sec:
-                result = HardGuardResult(
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    "release_hold",
-                    self._pedestrian_guard_blocked_by,
-                )
-            else:
-                self._pedestrian_guard_latched = False
-                self._pedestrian_guard_clear_since = 0.0
-                self._pedestrian_guard_blocked_by = None
         self._last_guard_mode = f"pedestrian_{result.mode}"
         if result.scale < 0.999:
             if self._hard_guard_event_pub is not None and now - self._last_pedestrian_hard_guard_event >= 0.1:

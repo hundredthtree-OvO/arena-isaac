@@ -105,6 +105,10 @@ class TestPhysxDiffProfile(unittest.TestCase):
             env["ARENA_ISAAC_DIFF_DIAGNOSTICS_RUN_LABEL"],
             "separated_tire_v1_k60_20_f12_4",
         )
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_UPDATE_RATE"], "15.0")
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_DEDUPLICATE"], "true")
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_FRONT_TOPIC"], "/front_scan")
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_REAR_TOPIC"], "/rear_scan")
 
     def test_physx_wheels_does_not_inherit_contact_wheel_parameters(self):
         contact_keys = {
@@ -146,6 +150,12 @@ class TestPhysxDiffProfile(unittest.TestCase):
         command = profile_module.gamepad_cmd(self.profile, "physx_diff_contact")
         self.assertIn("linear_scale:=0.4", command)
         self.assertIn("angular_scale:=0.8", command)
+
+    def test_synthetic_lidar_does_not_start_rtx_deduplication_relay(self):
+        _, env = profile_module.bridge_cmd(self.profile, "social_nav")
+
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_BACKEND"], "synthetic_2d")
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_DEDUPLICATE"], "false")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ except Exception:  # pragma: no cover
     from omni.isaac.core.utils.extensions import enable_extension, get_extension_path_from_name  # type: ignore
 
 from isaac_utils.rtx_sensor_settings import ensure_rtx_sensor_coord_frame
+from isaac_utils.lidar_scan_relay import raw_scan_topic
 
 
 def _log(logger, level: str, text: str):
@@ -527,6 +528,11 @@ def create_dual_lidar(
     range_min = _env_float("ARENA_ISAAC_LIDAR_RANGE_MIN", float(range_min))
     range_max = _env_float("ARENA_ISAAC_LIDAR_RANGE_MAX", float(range_max))
     update_rate = _env_float("ARENA_ISAAC_LIDAR_UPDATE_RATE", float(update_rate))
+    front_topic = os.environ.get("ARENA_ISAAC_LIDAR_FRONT_TOPIC", front_topic)
+    rear_topic = os.environ.get("ARENA_ISAAC_LIDAR_REAR_TOPIC", rear_topic)
+    deduplicate = _env_bool("ARENA_ISAAC_LIDAR_DEDUPLICATE", False)
+    front_publish_topic = raw_scan_topic(front_topic) if deduplicate else front_topic
+    rear_publish_topic = raw_scan_topic(rear_topic) if deduplicate else rear_topic
     ensure_rtx_sensor_coord_frame(
         logger=logger,
         reason=f"create_dual_lidar robot={robot_name}",
@@ -597,21 +603,24 @@ def create_dual_lidar(
     _create_lidar_publish_graph(
         graph_path=f"{robot_root_path}/front_lidar_publish_graph",
         lidar_prim_path=front_path,
-        topic_name=front_topic,
+        topic_name=front_publish_topic,
         frame_id=front_frame,
     )
     _create_lidar_publish_graph(
         graph_path=f"{robot_root_path}/rear_lidar_publish_graph",
         lidar_prim_path=rear_path,
-        topic_name=rear_topic,
+        topic_name=rear_publish_topic,
         frame_id=rear_frame,
     )
     _log(
         logger,
         "info",
         f"[dual_lidar] Created front/rear RTX lidar for {robot_name}: "
-        f"{front_topic} ({front_frame}) calibration_link={front_mount_path} at {front_path}; "
-        f"{rear_topic} ({rear_frame}) calibration_link={rear_mount_path} at {rear_path}; "
+        f"{front_publish_topic} -> {front_topic} ({front_frame}) "
+        f"calibration_link={front_mount_path} at {front_path}; "
+        f"{rear_publish_topic} -> {rear_topic} ({rear_frame}) "
+        f"calibration_link={rear_mount_path} at {rear_path}; "
+        f"deduplicate={deduplicate}, update_rate={update_rate:.1f}Hz, "
         f"publish_points={publish_points}, range_offset_m={range_offset_m}",
     )
     return front_path, rear_path

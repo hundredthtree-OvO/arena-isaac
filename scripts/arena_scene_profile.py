@@ -234,7 +234,15 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         env["ARENA_ISAAC_ROBOT_GEOMETRY_Z_MAX"] = str(robot_geometry.get("z_max"))
 
     env["ARENA_ISAAC_LIDAR_BACKEND"] = str(phase_cfg.get("lidar_backend", lidar.get("backend", "rtx")))
+    lidar_backend = env["ARENA_ISAAC_LIDAR_BACKEND"].strip().lower()
     env["ARENA_ISAAC_LIDAR_MOUNT_SOURCE"] = str(lidar.get("mount_source", "manual"))
+    env["ARENA_ISAAC_LIDAR_FRONT_TOPIC"] = str(lidar.get("front_topic", "/front_scan"))
+    env["ARENA_ISAAC_LIDAR_REAR_TOPIC"] = str(lidar.get("rear_topic", "/rear_scan"))
+    env["ARENA_ISAAC_LIDAR_DEDUPLICATE"] = (
+        "true"
+        if lidar_backend == "rtx" and bool(lidar.get("deduplicate", True))
+        else "false"
+    )
     if lidar.get("calibration_dir") is not None:
         env["ARENA_ISAAC_LIDAR_CALIBRATION_DIR"] = str(lidar.get("calibration_dir"))
     if lidar.get("range_offset_m") is not None:

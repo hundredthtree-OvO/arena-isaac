@@ -63,6 +63,9 @@ lidar:
   rear_frame: base_scan_02
   front_topic: /front_scan
   rear_topic: /rear_scan
+  # Isaac Sim 4.5 can republish cached solid-state RTX frames on render ticks.
+  # Keep only one ROS message per unique sensor timestamp.
+  deduplicate: true
   # Range offset is applied only to the RTX backend and can help suppress
   # near-field self hits from the robot body.
   range_offset_m: 0.03
@@ -83,7 +86,7 @@ lidar:
     fov_deg: 270.0
     range_min: 0.05
     range_max: 12.0
-    update_rate: 10.0
+    update_rate: 15.0
     z_min: 0.05
     z_max: 1.20
     tf_timeout_sec: 0.05
@@ -343,7 +346,7 @@ phases:
     people_extension_mode: replicator_agent_core
     enable_navmesh: false
     lidar_backend: rtx
-    update_rate: 10.0
+    update_rate: 15.0
   physx_diff_contact:
     mode: physx_diff_contact
     proxy_source: 'off'
@@ -356,4 +359,4 @@ phases:
     people_extension_mode: replicator_agent_core
     enable_navmesh: false
     lidar_backend: rtx
-    update_rate: 10.0
+    update_rate: 15.0

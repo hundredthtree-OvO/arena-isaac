@@ -231,6 +231,7 @@ import numpy as np
 from std_srvs.srv import Trigger
 from isaac_utils.origin_collision_probe import origin_collision_probe_service
 from isaac_utils.scene_collision_probe import scene_collision_probe_service
+from isaac_utils.lidar_scan_relay import register_lidar_scan_relays
 
 # Optional people/navmesh/replicator imports.  Keep navigation and replicator out
 # of the default people path; both can affect RTX/SDG/render-product state.
@@ -745,6 +746,7 @@ def create_controller(time=120):
         mecanum_teleop_manager.register_node(controller)
     except Exception as e:
         controller.get_logger().warning(f'Failed to register MecanumTeleopManager with controller: {e}')
+    controller._lidar_scan_relays = register_lidar_scan_relays()
     # Enable per-entity logging and filter to show only jackal-related outputs
     try:
         door_manager._log_every_tick = False
@@ -864,6 +866,12 @@ def main(args=None):
     finally:
         # Cleanly shut down the simulation and ROS 2
         controller.get_logger().info('Shutting down ROS 2 node and simulation.')
+        lidar_scan_relays = getattr(controller, '_lidar_scan_relays', None)
+        if lidar_scan_relays is not None:
+            try:
+                lidar_scan_relays.shutdown()
+            except Exception as e:
+                controller.get_logger().warning(f'Failed to stop RTX lidar scan relays: {e}')
         controller.destroy_node()
         rclpy.shutdown()
         simulation_app.close()
