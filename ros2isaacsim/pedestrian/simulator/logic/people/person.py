@@ -180,6 +180,14 @@ class Person:
             0.0,
             _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_HORIZON_SEC", 0.0),
         )
+        self._hard_guard_release_margin_m = max(
+            0.0,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_MARGIN_M", 0.0),
+        )
+        self._hard_guard_release_hold_sec = max(
+            0.0,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC", 0.0),
+        )
         self._dynamic_avoidance_default = None
         self._path_point_arrival_radius = _pedestrian_stop_radius()
 
@@ -265,6 +273,8 @@ class Person:
         self._last_update_dt = 0.0
         self._robot_yield_saved_path_points = None
         self._robot_yield_blocked = False
+        self._robot_guard_latched = False
+        self._robot_guard_clear_since = 0.0
         carb.log_info(
             f"Pedestrian interaction policy for {self._stage_prefix}: "
             f"robot={self._robot_interaction_policy}, "
@@ -927,6 +937,10 @@ class Person:
         self._target_yaw = None
         self._constrain_to_path = False
         self._set_guard_block_state(False)
+        self._robot_yield_saved_path_points = None
+        self._robot_yield_blocked = False
+        self._robot_guard_latched = False
+        self._robot_guard_clear_since = 0.0
         self._motion_command_generation += 1
         agent_name, agent = self._behavior_agent()
         if agent is not None:
@@ -1262,13 +1276,17 @@ class Person:
             return None
         return np.array(self._target_position[index_point], dtype=float)
 
-    def get_dynamic_guard_state(self, dt: float, active_goal=None):
+    def get_dynamic_guard_state(self, dt: float, active_goal=None, *, assume_moving: bool = False):
         pos_xy = (float(self._state.position[0]), float(self._state.position[1]))
         goal = active_goal
         if goal is None:
             goal = self._preview_active_goal()
         goal_xy = None if goal is None else (float(goal[0]), float(goal[1]))
-        prediction_speed = 0.0 if self._robot_yield_blocked else float(self._target_speed)
+        prediction_speed = (
+            float(self._target_speed)
+            if assume_moving or not self._robot_yield_blocked
+            else 0.0
+        )
         next_pos_xy = predict_pedestrian_step(
             pos_xy=pos_xy,
             goal_xy=goal_xy,
@@ -1290,15 +1308,68 @@ class Person:
         except Exception:
             return True
         prediction_dt = max(float(dt), self._hard_guard_horizon_sec)
-        ped_state = self.get_dynamic_guard_state(prediction_dt, active_goal=active_goal)
+        now = time.monotonic()
+        blocked_by = self._robot_guard_blocker(
+            mecanum_teleop_manager,
+            prediction_dt,
+            active_goal,
+            extra_margin_m=0.0,
+        )
+        if blocked_by is not None:
+            self._robot_guard_latched = True
+            self._robot_guard_clear_since = 0.0
+        elif self._robot_guard_latched:
+            blocked_by = self._robot_guard_blocker(
+                mecanum_teleop_manager,
+                prediction_dt,
+                active_goal,
+                extra_margin_m=self._hard_guard_release_margin_m,
+            )
+            if blocked_by is not None:
+                self._robot_guard_clear_since = 0.0
+            elif self._robot_guard_clear_since <= 0.0:
+                self._robot_guard_clear_since = float(now)
+                blocked_by = "release_hold"
+            elif now - self._robot_guard_clear_since < self._hard_guard_release_hold_sec:
+                blocked_by = "release_hold"
+            else:
+                self._robot_guard_latched = False
+                self._robot_guard_clear_since = 0.0
+        if blocked_by is None:
+            return True
+        if float(now) - float(self._last_guard_block_log) >= 0.5:
+            self._last_guard_block_log = float(now)
+            carb.log_info(
+                f"[dynamic_actor_guard] pedestrian {self._stage_prefix} paused for robot {blocked_by}"
+            )
+        return False
+
+    def _robot_guard_blocker(
+        self,
+        manager,
+        prediction_dt: float,
+        active_goal,
+        *,
+        extra_margin_m: float,
+    ) -> str | None:
+        # Resume checks must predict the first walking step, not the currently
+        # paused pose, otherwise the pedestrian chatters back into the robot.
+        ped_state = self.get_dynamic_guard_state(
+            prediction_dt,
+            active_goal=active_goal,
+            assume_moving=True,
+        )
         guarded_ped_state = PedestrianGuardState(
             name=ped_state.name,
             pos_xy=ped_state.pos_xy,
             next_pos_xy=ped_state.next_pos_xy,
-            radius=float(ped_state.radius) + self._hard_guard_margin_m,
+            radius=(
+                float(ped_state.radius)
+                + self._hard_guard_margin_m
+                + max(0.0, float(extra_margin_m))
+            ),
         )
-        blocked_by = None
-        for robot in list(getattr(mecanum_teleop_manager, "robots", {}).values()):
+        for robot in list(getattr(manager, "robots", {}).values()):
             getter = getattr(robot, "get_dynamic_guard_state", None)
             if not callable(getter):
                 continue
@@ -1308,17 +1379,8 @@ class Person:
             current_score, next_score = pedestrian_robot_scores(guarded_ped_state, robot_state)
             if movement_allowed(current_score, next_score, escape_epsilon=self._guard_escape_epsilon):
                 continue
-            blocked_by = robot_state.name
-            break
-        if blocked_by is None:
-            return True
-        now = time.monotonic()
-        if float(now) - float(self._last_guard_block_log) >= 0.5:
-            self._last_guard_block_log = float(now)
-            carb.log_info(
-                f"[dynamic_actor_guard] pedestrian {self._stage_prefix} paused for robot {blocked_by}"
-            )
-        return False
+            return robot_state.name
+        return None
 
     def _publish_robot_obstacles_to_people(self, dt: float) -> None:
         """Expose bridge robots to the official People dynamic avoidance manager."""

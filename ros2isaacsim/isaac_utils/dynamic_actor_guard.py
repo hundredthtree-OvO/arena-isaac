@@ -163,6 +163,8 @@ def scale_robot_command_for_pedestrians(
     margin_m: float = 0.0,
     binary_iterations: int = 10,
     escape_epsilon: float = 1e-4,
+    overlap_escape_horizon_sec: float = 0.0,
+    overlap_deadband_m: float = 0.0,
 ) -> HardGuardResult:
     """Scale a body-frame Twist only enough to avoid swept geometric overlap."""
     if not pedestrians:
@@ -179,16 +181,22 @@ def scale_robot_command_for_pedestrians(
     ]
     max_current = max(current_scores, default=0.0)
     if max_current > 0.0:
+        escape_horizon = float(overlap_escape_horizon_sec)
+        if escape_horizon <= 0.0:
+            escape_horizon = min(
+                max(float(sample_dt_sec), 0.05),
+                max(float(horizon_sec), 0.05),
+            )
         safe, blocked_by, final_score = _command_is_safe(
             robot=robot,
             pedestrians=pedestrians,
             vx=float(vx),
             vy=float(vy),
             wz=float(wz),
-            horizon_sec=min(max(float(sample_dt_sec), 0.05), max(float(horizon_sec), 0.05)),
+            horizon_sec=escape_horizon,
             sample_dt_sec=float(sample_dt_sec),
             margin_m=float(margin_m),
-            max_allowed_penetration=max_current,
+            max_allowed_penetration=max_current + max(0.0, float(overlap_deadband_m)),
         )
         if safe and final_score + float(escape_epsilon) < max_current:
             return HardGuardResult(float(vx), float(vy), float(wz), 1.0, "escape")

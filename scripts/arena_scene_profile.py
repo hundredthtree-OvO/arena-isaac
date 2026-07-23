@@ -207,9 +207,15 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         ("hard_guard_control_latency_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_LATENCY_SEC"),
         ("hard_guard_sample_dt_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_SAMPLE_DT_SEC"),
         ("hard_guard_pedestrian_horizon_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_HORIZON_SEC"),
+        ("hard_guard_release_margin_m", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_MARGIN_M"),
+        ("hard_guard_release_hold_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC"),
+        ("hard_guard_escape_horizon_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC"),
+        ("hard_guard_overlap_deadband_m", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M"),
     ):
         if pedestrians.get(key) is not None:
             env[env_name] = str(pedestrians.get(key))
+        else:
+            env.pop(env_name, None)
 
 
     # V16 robot geometry / lidar / actual odom-tf settings.  These are consumed

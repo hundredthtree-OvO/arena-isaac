@@ -50,6 +50,10 @@ pedestrians:
   hard_guard_control_latency_sec: 0.10
   hard_guard_sample_dt_sec: 0.04
   hard_guard_pedestrian_horizon_sec: 0.35
+  hard_guard_release_margin_m: 0.08
+  hard_guard_release_hold_sec: 0.25
+  hard_guard_escape_horizon_sec: 0.35
+  hard_guard_overlap_deadband_m: 0.015
 
 motion:
   wheel_radius: 0.08

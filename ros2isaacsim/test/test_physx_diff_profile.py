@@ -29,8 +29,8 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertIn("mecanum730_xms5_lidar_physx_diff_contact", contact_cmd)
         urdf = contact_cmd[contact_cmd.index("--urdf-path") + 1]
         self.assertTrue(urdf.endswith("mecanum730_xms5_physx_diff_contact.urdf"))
-        self.assertEqual(contact_cmd[contact_cmd.index("--x") + 1], "-4.4")
-        self.assertEqual(contact_cmd[contact_cmd.index("--y") + 1], "-1.0")
+        self.assertEqual(contact_cmd[contact_cmd.index("--x") + 1], "0.0")
+        self.assertEqual(contact_cmd[contact_cmd.index("--y") + 1], "0.0")
         self.assertEqual(contact_cmd[contact_cmd.index("--z") + 1], "0.03")
 
     def test_profile_composes_explicit_mode_files(self):
@@ -62,6 +62,10 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_LATENCY_SEC"], "0.1")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_SAMPLE_DT_SEC"], "0.04")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_HORIZON_SEC"], "0.35")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_MARGIN_M"], "0.08")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC"], "0.25")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC"], "0.35")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M"], "0.015")
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"], "restore_selected_meshes")
         self.assertEqual(
             env["ARENA_ISAAC_SCENE_DOOR_COLLISION_TARGETS"],
@@ -122,6 +126,10 @@ class TestPhysxDiffProfile(unittest.TestCase):
             "ARENA_ISAAC_DIFF_TIRE_CONTACT_REFRESH_SEC",
             "ARENA_ISAAC_DIFF_DIAGNOSTICS_OUTPUT",
             "ARENA_ISAAC_DIFF_DIAGNOSTICS_RUN_LABEL",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_MARGIN_M",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M",
         }
         with mock.patch.dict(os.environ, {key: "stale" for key in contact_keys}):
             command, env = profile_module.bridge_cmd(self.profile, "rtx_scan")

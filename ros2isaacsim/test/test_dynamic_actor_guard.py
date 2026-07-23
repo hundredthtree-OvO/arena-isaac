@@ -112,6 +112,40 @@ class TestDynamicActorGuard(unittest.TestCase):
         self.assertEqual(deeper.mode, "overlap_stop")
         self.assertEqual(tangent.mode, "overlap_stop")
         self.assertEqual(escape.mode, "escape")
+
+    def test_overlap_escape_can_use_a_longer_projection_window(self):
+        robot = self._robot()
+        pedestrian = self._ped(pos_xy=(0.38, 0.42))
+
+        result = scale_robot_command_for_pedestrians(
+            robot=robot,
+            pedestrians=[pedestrian],
+            vx=-0.08,
+            vy=0.0,
+            wz=-0.8,
+            horizon_sec=0.8,
+            sample_dt_sec=0.04,
+            overlap_escape_horizon_sec=0.35,
+            overlap_deadband_m=0.015,
+        )
+
+        self.assertEqual(result.mode, "escape")
+
+    def test_overlap_escape_still_rejects_a_command_that_gets_deeper(self):
+        result = scale_robot_command_for_pedestrians(
+            robot=self._robot(),
+            pedestrians=[self._ped(pos_xy=(0.5, 0.0))],
+            vx=0.2,
+            vy=0.0,
+            wz=0.0,
+            horizon_sec=0.8,
+            sample_dt_sec=0.04,
+            overlap_escape_horizon_sec=0.35,
+            overlap_deadband_m=0.015,
+        )
+
+        self.assertEqual(result.mode, "overlap_stop")
+
     def test_circle_grid_collision_is_not_orientation_dependent(self):
         occupied = {(0, 0)}
 
