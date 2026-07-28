@@ -1,4 +1,5 @@
 import unittest
+import math
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
@@ -14,9 +15,11 @@ PEDESTRIAN_STATE_UTILS = module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(PEDESTRIAN_STATE_UTILS)
 iter_unique_people = PEDESTRIAN_STATE_UTILS.iter_unique_people
+estimate_pedestrian_velocity = PEDESTRIAN_STATE_UTILS.estimate_pedestrian_velocity
 pedestrian_state_publishable = PEDESTRIAN_STATE_UTILS.pedestrian_state_publishable
 pedestrian_state_tags = PEDESTRIAN_STATE_UTILS.pedestrian_state_tags
 pedestrian_state_tagnames = PEDESTRIAN_STATE_UTILS.pedestrian_state_tagnames
+pedestrian_state_yaw = PEDESTRIAN_STATE_UTILS.pedestrian_state_yaw
 stable_person_name = PEDESTRIAN_STATE_UTILS.stable_person_name
 
 
@@ -35,6 +38,7 @@ class _DummyPerson:
         guard_block_reason="",
         active=True,
         parked=False,
+        orientation=(0.0, 0.0, 0.0, 1.0),
     ):
         self._requested_stage_name = requested
         self._stage_prefix = stage_prefix
@@ -48,6 +52,7 @@ class _DummyPerson:
         self._guard_block_reason = guard_block_reason
         self._active = active
         self.is_parked = parked
+        self._state = type("_State", (), {"orientation": orientation})()
 
 
 class TestPedestrianStateUtils(unittest.TestCase):
@@ -98,6 +103,8 @@ class TestPedestrianStateUtils(unittest.TestCase):
                 "guard_block_generation",
                 "guard_block_count",
                 "guard_block_reason",
+                "yaw_rad",
+                "yaw_valid",
             ),
         )
         self.assertEqual(
@@ -112,7 +119,48 @@ class TestPedestrianStateUtils(unittest.TestCase):
                 "7",
                 "3",
                 "robot",
+                "0.000000000",
+                "true",
             ],
+        )
+
+    def test_yaw_is_extracted_from_xyzw_orientation(self):
+        half_yaw = math.pi / 4.0
+        person = _DummyPerson(
+            orientation=(0.0, 0.0, math.sin(half_yaw), math.cos(half_yaw))
+        )
+
+        self.assertAlmostEqual(pedestrian_state_yaw(person), math.pi / 2.0)
+
+    def test_velocity_is_estimated_from_consecutive_valid_positions(self):
+        velocity = estimate_pedestrian_velocity(
+            (1.0, (1.0, 2.0, 0.0)),
+            (1.2, 1.8, 0.0),
+            1.2,
+        )
+
+        self.assertAlmostEqual(velocity[0], 1.0)
+        self.assertAlmostEqual(velocity[1], -1.0)
+        self.assertAlmostEqual(velocity[2], 0.0)
+
+    def test_velocity_resets_after_large_sample_gap(self):
+        self.assertEqual(
+            estimate_pedestrian_velocity(
+                (1.0, (1.0, 2.0, 0.0)),
+                (2.0, 3.0, 0.0),
+                3.0,
+            ),
+            (0.0, 0.0, 0.0),
+        )
+
+    def test_velocity_rejects_pool_reactivation_teleport(self):
+        self.assertEqual(
+            estimate_pedestrian_velocity(
+                (1.0, (1000.0, 1000.0, 0.0)),
+                (-3.8, -0.9, 0.0),
+                1.1,
+            ),
+            (0.0, 0.0, 0.0),
         )
 
 

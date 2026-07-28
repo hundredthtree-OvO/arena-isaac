@@ -86,8 +86,39 @@ def move_pedestrian(request: MovePed.Request, response: MovePed.Response):
 
         direct_pose = _goal_or_none(getattr(nav_command, "direct_pose", None))
         use_direct_pose = bool(getattr(nav_command, "use_direct_pose", False))
+        use_external_motion = bool(getattr(nav_command, "use_external_motion", False))
         stop = bool(getattr(nav_command, "stop", False))
         velocity = resolve_nav_velocity(getattr(nav_command, "velocity", None), default=1.0)
+
+        if use_external_motion and direct_pose is not None:
+            external_velocity = _goal_or_none(
+                getattr(nav_command, "external_velocity", None)
+            )
+            if external_velocity is None:
+                carb.log_error(
+                    f"External motion command has no valid world velocity: {nav_command.path}"
+                )
+                accepted = False
+                continue
+            try:
+                person.set_external_motion(
+                    direct_pose,
+                    external_velocity,
+                    yaw=float(getattr(nav_command, "orientation", 0.0) or 0.0),
+                    timeout_sec=float(
+                        getattr(nav_command, "external_timeout_sec", 0.5) or 0.5
+                    ),
+                    freeze_pose=bool(
+                        getattr(nav_command, "external_freeze_pose", False)
+                    ),
+                )
+            except (TypeError, ValueError) as exc:
+                carb.log_error(
+                    f"Invalid external motion command for {nav_command.path}: {exc}"
+                )
+                accepted = False
+                continue
+            continue
 
         if use_direct_pose and direct_pose is not None:
             person.set_direct_pose(

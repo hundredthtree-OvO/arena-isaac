@@ -37,6 +37,12 @@ from omni.anim.people.scripts.utils import Utils
 from omni.usd import get_stage_next_free_path
 from pedestrian.simulator.logic.people.person_controller import PersonController
 from pedestrian.simulator.logic.people_manager import PeopleManager
+from pedestrian.simulator.logic.people.external_motion import (
+    ExternalMotionState,
+    animation_tracking_sample,
+    bounded_yaw_step,
+    locomotion_path_points,
+)
 from pedestrian.simulator.logic.people.navigation_safety import (
     LateralAvoidanceCandidate,
     active_polyline_goal,
@@ -232,6 +238,41 @@ class Person:
         self._motion_command_generation = 0
         self._dispatched_command_generation = 0
         self._motion_state = "idle"
+        self._external_motion = ExternalMotionState(
+            walk_speed_threshold=max(
+                0.0,
+                _env_float("ARENA_ISAAC_EXTERNAL_MOTION_WALK_THRESHOLD_MPS", 0.05),
+            )
+        )
+        self._external_hold_position = None
+        self._external_hold_orientation = None
+        self._external_motion_tracking_gain = max(
+            0.0,
+            _env_float("ARENA_ISAAC_EXTERNAL_MOTION_TRACKING_GAIN", 1.5),
+        )
+        self._external_motion_max_speed_mps = max(
+            0.05,
+            _env_float("ARENA_ISAAC_EXTERNAL_MOTION_MAX_SPEED_MPS", 1.5),
+        )
+        self._external_motion_animation_full_speed_mps = max(
+            0.05,
+            _env_float(
+                "ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_FULL_SPEED_MPS",
+                1.0,
+            ),
+        )
+        self._external_motion_yaw_rate_radps = max(
+            0.0,
+            _env_float("ARENA_ISAAC_EXTERNAL_MOTION_YAW_RATE_RADPS", 1.5),
+        )
+        # A root rebase is visually a teleport.  Keep it opt-in for emergency
+        # recovery; normal HuNav control closes the loop using the measured
+        # AnimationGraph pose instead.
+        self._external_motion_hard_sync_distance_m = max(
+            0.0,
+            _env_float("ARENA_ISAAC_EXTERNAL_MOTION_HARD_SYNC_DISTANCE_M", 0.0),
+        )
+        self._last_external_sync_warn = 0.0
         self._pose_valid = False
         self._last_valid_pose_time = 0.0
         self._last_static_guard_warn = 0.0
@@ -354,15 +395,35 @@ class Person:
         if self._anim_motion_state == "idle":
             return
         self._set_anim_variable("Walk", 0.0)
-        self._set_anim_variable("Action", "Idle")
+        # Isaac 4.5's People commands use None, not Idle, to exit locomotion.
+        self._set_anim_variable("Action", "None")
         self._anim_motion_state = "idle"
         self._last_walk_speed = None
 
-    def _set_walk_animation(self, active_goal):
-        if self._anim_motion_state != "walk":
-            self._set_anim_variable("Action", "Walk")
-            self._anim_motion_state = "walk"
+    def _set_walk_animation(self, active_goal, *, external_sample=None):
+        # BaseCommand.walk() refreshes Action and PathPoints every frame.  The
+        # graph consumes Python lists of carb.Float3, not USD Vt arrays.
+        self._set_anim_variable("Action", "Walk")
+        self._anim_motion_state = "walk"
+        if external_sample is not None:
+            points = locomotion_path_points(external_sample)
+            self._set_anim_variable(
+                "PathPoints",
+                [carb.Float3(*point) for point in points],
+            )
         speed = float(self._target_speed)
+        if external_sample is not None:
+            # Walk is an AnimGraph blend value, while the external sample is
+            # m/s.  Use the tracking command so a lagging visual root can
+            # smoothly catch its HuNav reference without a pose teleport.
+            speed = min(
+                1.0,
+                max(
+                    0.0,
+                    float(external_sample.speed)
+                    / self._external_motion_animation_full_speed_mps,
+                ),
+            )
         if self._last_walk_speed is None or abs(float(self._last_walk_speed) - speed) > 1e-4:
             self._set_anim_variable("Walk", speed)
             self._last_walk_speed = speed
@@ -836,6 +897,23 @@ class Person:
             return
 
         self._last_update_dt = max(0.0, float(dt))
+        external_sample = self._external_motion.sample(time.monotonic())
+        if external_sample is not None:
+            if self._external_hold_position is not None:
+                self._set_idle_animation()
+                self._apply_external_hold_pose()
+                return
+            self._apply_external_motion_sample(external_sample)
+            animation_sample = self._external_animation_sample(external_sample)
+            if self._external_motion.should_walk(animation_sample):
+                self._set_walk_animation(
+                    animation_sample.position,
+                    external_sample=animation_sample,
+                )
+            else:
+                self._track_external_stationary_yaw(animation_sample, dt)
+                self._set_idle_animation()
+            return
         if self._behavior_script_enabled:
             if self._robot_interaction_policy == "avoid":
                 self._publish_robot_obstacles_to_people(dt)
@@ -905,6 +983,8 @@ class Person:
         Args:
             position (list): A list with the x, y, z coordinates of the target position.
         """
+        self._external_motion.clear()
+        self._clear_external_hold()
         path = np.array(position, dtype=float)
         if path.ndim == 1:
             path = path.reshape(1, -1)
@@ -940,6 +1020,8 @@ class Person:
         return self._motion_command_generation
 
     def stop_motion(self):
+        self._external_motion.clear()
+        self._clear_external_hold()
         self._target_position = np.empty((0, 3), dtype=float)
         self._num_path_points = 0
         self._current_point_index = 0
@@ -1059,6 +1141,8 @@ class Person:
         self.dispose()
 
     def set_direct_pose(self, position, yaw: float | None = None, *, stop: bool = True):
+        self._external_motion.clear()
+        self._clear_external_hold()
         pos = np.array(position, dtype=float).reshape(3)
         if yaw is None:
             yaw = float(Rotation.from_quat(self._state.orientation).as_euler("xyz")[2])
@@ -1083,6 +1167,188 @@ class Person:
                 )
         self._state.position = pos
         self._state.orientation = orientation
+        self._update_collision_proxy()
+
+    def set_external_motion(
+        self,
+        position,
+        velocity,
+        yaw: float,
+        *,
+        timeout_sec: float = 0.5,
+        freeze_pose: bool = False,
+    ):
+        """Give an external planner sole authority over root motion."""
+        if not self._external_motion.enabled:
+            self.stop_motion()
+        speed = math.hypot(float(velocity[0]), float(velocity[1]))
+        if freeze_pose:
+            if self._external_hold_position is None:
+                self._external_hold_position = np.array(
+                    self._state.position,
+                    dtype=float,
+                ).reshape(3)
+                self._external_hold_orientation = Rotation.from_euler(
+                    "z",
+                    float(yaw),
+                    degrees=False,
+                ).as_quat()
+        else:
+            self._clear_external_hold()
+        self._external_motion.set_command(
+            position=position,
+            velocity=velocity,
+            yaw=float(yaw),
+            received_at=time.monotonic(),
+            timeout_sec=float(timeout_sec),
+        )
+        self._target_speed = speed
+        self._target_yaw = float(yaw)
+        self._motion_state = "executing"
+        self._set_guard_block_state(False)
+
+    def _clear_external_hold(self) -> None:
+        self._external_hold_position = None
+        self._external_hold_orientation = None
+
+    def _apply_external_hold_pose(self) -> None:
+        """Keep an idle character at one world pose without moving its parent root."""
+        if (
+            self._external_hold_position is None
+            or self._external_hold_orientation is None
+        ):
+            return
+        position = np.array(self._external_hold_position, dtype=float).reshape(3)
+        orientation = np.array(
+            self._external_hold_orientation,
+            dtype=float,
+        ).reshape(4)
+        if self.character_graph is not None:
+            try:
+                self.character_graph.set_world_transform(
+                    carb.Float3(
+                        float(position[0]),
+                        float(position[1]),
+                        float(position[2]),
+                    ),
+                    carb.Float4(
+                        float(orientation[0]),
+                        float(orientation[1]),
+                        float(orientation[2]),
+                        float(orientation[3]),
+                    ),
+                )
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to hold external AnimGraph pose for "
+                    f"{self._stage_prefix}: {exc}"
+                )
+                return
+        self._state.position = position
+        self._state.orientation = orientation
+        self._pose_valid = True
+        self._last_valid_pose_time = time.monotonic()
+        self._update_collision_proxy()
+
+    def _external_animation_sample(self, reference_sample):
+        """Let MotionMatching move the root while it tracks HuNav's reference."""
+        return animation_tracking_sample(
+            reference_sample,
+            self._state.position,
+            tracking_gain=self._external_motion_tracking_gain,
+            max_speed_mps=self._external_motion_max_speed_mps,
+        )
+
+    def _apply_external_motion_sample(self, sample):
+        # HuNav supplies a reference trajectory.  Normal locomotion is owned
+        # by MotionMatching.  Root rebasing is explicitly opt-in because it
+        # appears as a visible teleport when the graph falls behind.
+        reference_position = np.array(sample.position, dtype=float).reshape(3)
+        error_m = float(
+            np.linalg.norm(reference_position[:2] - self._state.position[:2])
+        )
+        if (
+            not sample.expired
+            and self._external_motion_hard_sync_distance_m > 0.0
+            and error_m > self._external_motion_hard_sync_distance_m
+        ):
+            self._synchronize_external_root_pose(reference_position, float(sample.yaw))
+            now = time.monotonic()
+            if now - self._last_external_sync_warn >= 1.0:
+                self._last_external_sync_warn = now
+                carb.log_warn(
+                    f"External HuNav reference rebased {self._stage_prefix}: "
+                    f"tracking_error_m={error_m:.3f}"
+                )
+        self._target_speed = float(sample.speed)
+        self._motion_state = "idle" if sample.expired else "executing"
+
+    def _track_external_stationary_yaw(self, sample, dt: float) -> None:
+        """Finish a HuNav terminal heading without translating the character."""
+        if self._external_motion_yaw_rate_radps <= 0.0:
+            return
+        try:
+            current_yaw = float(
+                Rotation.from_quat(self._state.orientation).as_euler("xyz")[2]
+            )
+            next_yaw = bounded_yaw_step(
+                current_yaw,
+                float(sample.yaw),
+                max_rate_radps=self._external_motion_yaw_rate_radps,
+                dt=float(dt),
+            )
+        except (TypeError, ValueError):
+            return
+        yaw_error = math.atan2(
+            math.sin(float(sample.yaw) - current_yaw),
+            math.cos(float(sample.yaw) - current_yaw),
+        )
+        if abs(yaw_error) <= 1e-3:
+            return
+        position = np.array(self._state.position, dtype=float).reshape(3)
+        orientation = Rotation.from_euler("z", next_yaw, degrees=False).as_quat()
+        if self.character_graph is not None:
+            try:
+                self.character_graph.set_world_transform(
+                    carb.Float3(float(position[0]), float(position[1]), float(position[2])),
+                    carb.Float4(
+                        float(orientation[0]),
+                        float(orientation[1]),
+                        float(orientation[2]),
+                        float(orientation[3]),
+                    ),
+                )
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to align stationary external yaw for {self._stage_prefix}: {exc}"
+                )
+                return
+        self._state.orientation = orientation
+        self._update_collision_proxy()
+
+    def _synchronize_external_root_pose(self, position, yaw: float) -> None:
+        pos = np.array(position, dtype=float).reshape(3)
+        orientation = Rotation.from_euler("z", float(yaw), degrees=False).as_quat()
+        self._set_stage_root_pose(pos, float(yaw))
+        if self.character_graph is not None:
+            try:
+                self.character_graph.set_world_transform(
+                    carb.Float3(float(pos[0]), float(pos[1]), float(pos[2])),
+                    carb.Float4(
+                        float(orientation[0]),
+                        float(orientation[1]),
+                        float(orientation[2]),
+                        float(orientation[3]),
+                    ),
+                )
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to rebase external AnimGraph pose for {self._stage_prefix}: {exc}"
+                )
+        self._state.position = pos
+        self._state.orientation = orientation
+        self._pose_valid = True
+        self._last_valid_pose_time = time.monotonic()
         self._update_collision_proxy()
 
     def _set_stage_root_pose(self, position, yaw: float):
@@ -1222,6 +1488,29 @@ class Person:
             return
 
         self._ensure_animation_graph_ready()
+
+        # External motion supplies a reference, but MotionMatching owns normal
+        # root movement. Feed the actual root back into the state stream.
+        if self._external_motion.enabled:
+            if self._external_hold_position is not None:
+                self._apply_external_hold_pose()
+                return
+            pose = self._read_character_graph_pose()
+            if pose is None:
+                pose = self._read_stage_root_pose()
+            if pose is None:
+                self._pose_valid = False
+                self._warn_pose_read_throttled(
+                    f"Keeping previous external-motion pose for {self._stage_prefix}; "
+                    "AnimGraph/root transform was invalid or implausible."
+                )
+                return
+            self._state.position = pose[0]
+            self._state.orientation = pose[1]
+            self._pose_valid = True
+            self._last_valid_pose_time = time.monotonic()
+            self._update_collision_proxy()
+            return
 
         pose = self._read_character_graph_pose()
         if pose is None:

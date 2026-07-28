@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+import time
 
 from pedestrian.simulator.logic.people_manager import PeopleManager
 
@@ -14,6 +15,7 @@ except Exception:  # pragma: no cover - optional runtime dependency
     PeoplePerson = None
 
 from .pedestrian_state_utils import (
+    estimate_pedestrian_velocity,
     iter_unique_people,
     pedestrian_state_publishable,
     pedestrian_state_tags,
@@ -38,6 +40,7 @@ class PedestrianStatePublisher:
     def __post_init__(self):
         self._publisher = None
         self._timer = None
+        self._previous_states = {}
         if People is None or PeoplePerson is None or Point is None:
             self._log_warn("people_msgs is unavailable; /isaac/pedestrian_states will not be published.")
             return
@@ -52,16 +55,21 @@ class PedestrianStatePublisher:
         if self._publisher is None:
             return
         msg = People()
+        observed_at_sec = time.monotonic()
         try:
-            msg.header.stamp = self.controller.get_clock().now().to_msg()
+            now = self.controller.get_clock().now()
+            msg.header.stamp = now.to_msg()
+            observed_at_sec = float(now.nanoseconds) * 1e-9
             msg.header.frame_id = "map"
         except Exception:
             pass
 
         manager = PeopleManager.get_people_manager()
+        current_names = set()
         for name, person in iter_unique_people(getattr(manager, "people", {}) or {}):
             if not pedestrian_state_publishable(person):
                 continue
+            current_names.add(str(name))
             state = getattr(person, "_state", None)
             position = getattr(state, "position", None)
             if position is None or len(position) < 3 or not _valid_position(position):
@@ -69,12 +77,33 @@ class PedestrianStatePublisher:
             entry = PeoplePerson()
             entry.name = str(name)
             entry.position = Point(x=float(position[0]), y=float(position[1]), z=float(position[2]))
-            entry.velocity = Point(x=0.0, y=0.0, z=0.0)
-            entry.reliability = 1.0 if bool(getattr(person, "_pose_valid", False)) else 0.0
+            pose_valid = bool(getattr(person, "_pose_valid", False))
+            motion_state = str(
+                getattr(person, "_motion_state", "unknown")
+            ).strip().lower()
+            velocity = (0.0, 0.0, 0.0)
+            if pose_valid and motion_state in {"accepted", "executing"}:
+                velocity = estimate_pedestrian_velocity(
+                    self._previous_states.get(str(name)),
+                    position,
+                    observed_at_sec,
+                )
+            if pose_valid:
+                self._previous_states[str(name)] = (
+                    observed_at_sec,
+                    tuple(float(position[index]) for index in range(3)),
+                )
+            entry.velocity = Point(x=velocity[0], y=velocity[1], z=velocity[2])
+            entry.reliability = 1.0 if pose_valid else 0.0
             entry.tagnames = list(pedestrian_state_tagnames())
             entry.tags = pedestrian_state_tags(person)
             msg.people.append(entry)
 
+        self._previous_states = {
+            name: state
+            for name, state in self._previous_states.items()
+            if name in current_names
+        }
         self._publisher.publish(msg)
 
     def _log_info(self, message: str):

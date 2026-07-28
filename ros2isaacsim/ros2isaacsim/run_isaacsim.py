@@ -688,6 +688,84 @@ def build_voxel_map_service(controller):
 
     return controller.create_service(Trigger, "/isaac/build_voxel_map", _callback)
 
+
+def export_walkable_map_service(controller):
+    def _get_param(name, default):
+        try:
+            value = controller.get_parameter(name).value
+            return default if value is None or value == "" else value
+        except Exception:
+            return default
+
+    def _csv_floats(value, count, name):
+        result = tuple(float(item.strip()) for item in str(value).split(",") if item.strip())
+        if len(result) != count:
+            raise ValueError(f"{name} requires {count} comma-separated values")
+        return result
+
+    def _callback(_request, response):
+        try:
+            from isaac_utils.walkable_map_builder import (
+                WalkableMapConfig,
+                build_walkable_map,
+            )
+
+            output_path = str(
+                _get_param(
+                    "walkable_map_output_path",
+                    "/home/stardust/resources/arena_ws/arena_assets/navigation/"
+                    "shenxinfu_841837.walkable.json",
+                )
+            )
+            config = WalkableMapConfig(
+                scene_root=str(
+                    _get_param("walkable_map_scene_root", _default_voxel_scene_root())
+                ),
+                output_path=output_path,
+                resolution=float(_get_param("walkable_map_resolution", 0.05)),
+                origin=_csv_floats(
+                    _get_param("walkable_map_origin", "-2.24,-0.90,0.75"),
+                    3,
+                    "walkable_map_origin",
+                ),
+                world_bounds=_csv_floats(
+                    _get_param(
+                        "walkable_map_world_bounds",
+                        "-4.60,3.60,-2.10,1.80",
+                    ),
+                    4,
+                    "walkable_map_world_bounds",
+                ),
+                exclude_path_keywords=tuple(
+                    item.strip()
+                    for item in str(
+                        _get_param(
+                            "walkable_map_exclude_path_keywords",
+                            "/World/Characters,/World/xms_mecanum,_debug",
+                        )
+                    ).split(",")
+                    if item.strip()
+                ),
+            )
+            data = build_walkable_map(config, logger=controller.get_logger())
+            response.success = True
+            response.message = (
+                f"walkable map exported: output={output_path}; "
+                f"dimensions={data['width']}x{data['height']}; "
+                f"counts={data['counts']}; fingerprint={data['scene_fingerprint'][:12]}"
+            )
+        except Exception as exc:
+            response.success = False
+            response.message = f"failed to export walkable map: {exc}"
+            controller.get_logger().error(response.message)
+        return response
+
+    return controller.create_service(
+        Trigger,
+        "/isaac/export_walkable_map",
+        _callback,
+    )
+
 # =================================================================================
 
 # ===================================controller====================================
@@ -717,6 +795,22 @@ def create_controller(time=120):
         controller.declare_parameter("voxel_map_max_debug_stage_points", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_DEBUG_STAGE_POINTS", "30000")))
         controller.declare_parameter("voxel_map_create_stage_debug_points", os.environ.get("ARENA_ISAAC_VOXEL_CREATE_STAGE_DEBUG_POINTS", "true"))
         controller.declare_parameter("voxel_map_stage_debug_path", os.environ.get("ARENA_ISAAC_VOXEL_STAGE_DEBUG_PATH", ""))
+        controller.declare_parameter("walkable_map_scene_root", _default_voxel_scene_root())
+        controller.declare_parameter(
+            "walkable_map_output_path",
+            "/home/stardust/resources/arena_ws/arena_assets/navigation/"
+            "shenxinfu_841837.walkable.json",
+        )
+        controller.declare_parameter("walkable_map_resolution", 0.05)
+        controller.declare_parameter("walkable_map_origin", "-2.24,-0.90,0.75")
+        controller.declare_parameter(
+            "walkable_map_world_bounds",
+            "-4.60,3.60,-2.10,1.80",
+        )
+        controller.declare_parameter(
+            "walkable_map_exclude_path_keywords",
+            "/World/Characters,/World/xms_mecanum,_debug",
+        )
     except Exception:
         pass
     import_usd(controller)
@@ -735,6 +829,7 @@ def create_controller(time=120):
     spawn_door(controller)
     export_collision_proxies_service(controller)
     build_voxel_map_service(controller)
+    export_walkable_map_service(controller)
     origin_collision_probe_service(controller)
     scene_collision_probe_service(controller)
     # Let the DoorManager subscribe to ROS topics on this controller node

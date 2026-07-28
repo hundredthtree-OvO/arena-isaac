@@ -1,3 +1,6 @@
+import math
+
+
 def stable_person_name(person) -> str:
     requested = str(getattr(person, "_requested_stage_name", "") or "").strip()
     if requested:
@@ -35,7 +38,59 @@ def pedestrian_state_tagnames() -> tuple[str, ...]:
         "guard_block_generation",
         "guard_block_count",
         "guard_block_reason",
+        "yaw_rad",
+        "yaw_valid",
     )
+
+
+def pedestrian_state_yaw(person) -> float | None:
+    state = getattr(person, "_state", None)
+    orientation = getattr(state, "orientation", None)
+    try:
+        x, y, z, w = (float(orientation[index]) for index in range(4))
+    except (TypeError, ValueError, IndexError):
+        return None
+    if not all(math.isfinite(value) for value in (x, y, z, w)):
+        return None
+    norm_sq = x * x + y * y + z * z + w * w
+    if norm_sq <= 1e-12:
+        return None
+    scale = 1.0 / math.sqrt(norm_sq)
+    x, y, z, w = x * scale, y * scale, z * scale, w * scale
+    return math.atan2(
+        2.0 * (w * z + x * y),
+        1.0 - 2.0 * (y * y + z * z),
+    )
+
+
+def estimate_pedestrian_velocity(
+    previous,
+    position,
+    observed_at_sec: float,
+    *,
+    max_gap_sec: float = 1.0,
+    max_speed_mps: float = 5.0,
+) -> tuple[float, float, float]:
+    if previous is None:
+        return (0.0, 0.0, 0.0)
+    previous_at, previous_position = previous
+    dt = float(observed_at_sec) - float(previous_at)
+    if dt <= 1e-6 or dt > float(max_gap_sec):
+        return (0.0, 0.0, 0.0)
+    try:
+        velocity = tuple(
+            (float(position[index]) - float(previous_position[index])) / dt
+            for index in range(3)
+        )
+    except (TypeError, ValueError, IndexError):
+        return (0.0, 0.0, 0.0)
+    if not all(math.isfinite(value) for value in velocity):
+        return (0.0, 0.0, 0.0)
+    if math.sqrt(sum(value * value for value in velocity)) > float(
+        max_speed_mps
+    ):
+        return (0.0, 0.0, 0.0)
+    return velocity
 
 
 def pedestrian_state_tags(person) -> list[str]:
@@ -44,6 +99,7 @@ def pedestrian_state_tags(person) -> list[str]:
     guard_block_count = getattr(person, "_guard_block_count", 0) if guard_blocked else 0
     guard_block_reason = getattr(person, "_guard_block_reason", "") if guard_blocked else ""
     pose_valid = bool(getattr(person, "_pose_valid", False))
+    yaw = pedestrian_state_yaw(person)
     return [
         str(getattr(person, "_stage_prefix", "") or ""),
         str(getattr(person, "character_skel_root_stage_path", "") or ""),
@@ -54,4 +110,6 @@ def pedestrian_state_tags(person) -> list[str]:
         str(guard_block_generation),
         str(guard_block_count),
         str(guard_block_reason),
+        "nan" if yaw is None else f"{yaw:.9f}",
+        "false" if yaw is None else "true",
     ]

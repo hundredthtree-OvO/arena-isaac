@@ -5,6 +5,10 @@ bool loop_path
 float32 velocity
 bool use_direct_pose
 float32[3] direct_pose
+bool use_external_motion
+float32[3] external_velocity
+float32 external_timeout_sec
+bool external_freeze_pose
 float32 orientation
 bool stop
 bool constrain_to_path

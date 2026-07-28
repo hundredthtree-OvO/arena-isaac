@@ -49,6 +49,7 @@ setup(
             "spawn_v10_scene_lidar_validation=ros2isaacsim.spawn_v10_scene_lidar_validation:main",
             "export_collision_proxies=ros2isaacsim.export_collision_proxies:main",
             "export_voxel_map=ros2isaacsim.export_voxel_map:main",
+            "export_walkable_map=ros2isaacsim.export_walkable_map:main",
             "synthetic_2d_laser=ros2isaacsim.synthetic_2d_laser:main",
         ],
     },
