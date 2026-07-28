@@ -17,6 +17,7 @@ class TestExternalMotionContract(unittest.TestCase):
         self.assertLess(external_branch, direct_branch)
         self.assertIn("person.set_external_motion(", source)
         self.assertIn("external_freeze_pose", source)
+        self.assertIn("external_motion_mode", source)
 
     def test_person_update_checks_external_authority_before_behavior_script(self):
         source = (
@@ -43,7 +44,15 @@ class TestExternalMotionContract(unittest.TestCase):
         self.assertIn("_external_motion_hard_sync_distance_m", source)
         self.assertIn("self._external_hold_position", source)
         self.assertIn("self._apply_external_hold_pose()", update_source)
-        self.assertIn("if freeze_pose:", source)
+        self.assertIn("if freeze_pose and mode == 0:", source)
+        self.assertIn("if active_mode == ExternalMotionMode.FREEZE:", source)
+        self.assertIn(
+            "elif active_mode == ExternalMotionMode.TERMINAL_ALIGN:",
+            source,
+        )
+        self.assertIn("_advance_external_terminal_alignment(dt)", update_source)
+        self.assertIn("ExternalMotionModeState", source)
+        self.assertIn("External terminal alignment complete", source)
 
     def test_stationary_external_hold_has_one_transform_owner(self):
         source = (

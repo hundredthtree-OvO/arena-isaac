@@ -111,6 +111,9 @@ def move_pedestrian(request: MovePed.Request, response: MovePed.Response):
                     freeze_pose=bool(
                         getattr(nav_command, "external_freeze_pose", False)
                     ),
+                    motion_mode=int(
+                        getattr(nav_command, "external_motion_mode", 0)
+                    ),
                 )
             except (TypeError, ValueError) as exc:
                 carb.log_error(

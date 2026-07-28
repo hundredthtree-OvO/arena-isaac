@@ -3,8 +3,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import IntEnum
 import math
 from typing import Sequence
+
+
+class ExternalMotionMode(IntEnum):
+    LOCOMOTION = 0
+    FREEZE = 1
+    TERMINAL_ALIGN = 2
+
+
+class ExternalMotionModeState:
+    def __init__(self):
+        self.mode = ExternalMotionMode.LOCOMOTION
+
+    def transition(self, requested: int) -> tuple[ExternalMotionMode, ExternalMotionMode]:
+        try:
+            next_mode = ExternalMotionMode(int(requested))
+        except ValueError as exc:
+            raise ValueError(f"unsupported external motion mode: {requested}") from exc
+        previous = self.mode
+        self.mode = next_mode
+        return previous, next_mode
 
 
 @dataclass(frozen=True)

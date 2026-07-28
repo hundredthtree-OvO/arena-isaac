@@ -9,6 +9,10 @@ bool use_external_motion
 float32[3] external_velocity
 float32 external_timeout_sec
 bool external_freeze_pose
+uint8 EXTERNAL_MOTION_LOCOMOTION=0
+uint8 EXTERNAL_MOTION_FREEZE=1
+uint8 EXTERNAL_MOTION_TERMINAL_ALIGN=2
+uint8 external_motion_mode
 float32 orientation
 bool stop
 bool constrain_to_path

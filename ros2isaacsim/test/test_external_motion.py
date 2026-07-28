@@ -1,6 +1,8 @@
 import unittest
 
 from pedestrian.simulator.logic.people.external_motion import (
+    ExternalMotionMode,
+    ExternalMotionModeState,
     ExternalMotionSample,
     ExternalMotionState,
     animation_tracking_sample,
@@ -10,6 +12,23 @@ from pedestrian.simulator.logic.people.external_motion import (
 
 
 class TestExternalMotionState(unittest.TestCase):
+    def test_motion_mode_state_reports_explicit_transitions(self):
+        state = ExternalMotionModeState()
+
+        previous, current = state.transition(ExternalMotionMode.FREEZE)
+        self.assertEqual(previous, ExternalMotionMode.LOCOMOTION)
+        self.assertEqual(current, ExternalMotionMode.FREEZE)
+
+        previous, current = state.transition(ExternalMotionMode.TERMINAL_ALIGN)
+        self.assertEqual(previous, ExternalMotionMode.FREEZE)
+        self.assertEqual(current, ExternalMotionMode.TERMINAL_ALIGN)
+
+    def test_motion_mode_state_rejects_unknown_modes(self):
+        state = ExternalMotionModeState()
+
+        with self.assertRaises(ValueError):
+            state.transition(99)
+
     def test_interpolates_world_pose_from_latest_velocity(self):
         state = ExternalMotionState()
         state.set_command(

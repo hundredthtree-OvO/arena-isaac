@@ -38,6 +38,8 @@ from omni.usd import get_stage_next_free_path
 from pedestrian.simulator.logic.people.person_controller import PersonController
 from pedestrian.simulator.logic.people_manager import PeopleManager
 from pedestrian.simulator.logic.people.external_motion import (
+    ExternalMotionMode,
+    ExternalMotionModeState,
     ExternalMotionState,
     animation_tracking_sample,
     bounded_yaw_step,
@@ -244,8 +246,12 @@ class Person:
                 _env_float("ARENA_ISAAC_EXTERNAL_MOTION_WALK_THRESHOLD_MPS", 0.05),
             )
         )
+        self._external_motion_mode = ExternalMotionModeState()
         self._external_hold_position = None
         self._external_hold_orientation = None
+        self._external_terminal_position = None
+        self._external_terminal_yaw = None
+        self._external_terminal_complete_logged = False
         self._external_motion_tracking_gain = max(
             0.0,
             _env_float("ARENA_ISAAC_EXTERNAL_MOTION_TRACKING_GAIN", 1.5),
@@ -903,6 +909,10 @@ class Person:
                 self._set_idle_animation()
                 self._apply_external_hold_pose()
                 return
+            if self._external_terminal_position is not None:
+                self._set_idle_animation()
+                self._advance_external_terminal_alignment(dt)
+                return
             self._apply_external_motion_sample(external_sample)
             animation_sample = self._external_animation_sample(external_sample)
             if self._external_motion.should_walk(animation_sample):
@@ -985,6 +995,8 @@ class Person:
         """
         self._external_motion.clear()
         self._clear_external_hold()
+        self._clear_external_terminal_alignment()
+        self._reset_external_motion_mode("legacy_path")
         path = np.array(position, dtype=float)
         if path.ndim == 1:
             path = path.reshape(1, -1)
@@ -1022,6 +1034,8 @@ class Person:
     def stop_motion(self):
         self._external_motion.clear()
         self._clear_external_hold()
+        self._clear_external_terminal_alignment()
+        self._reset_external_motion_mode("stop_motion")
         self._target_position = np.empty((0, 3), dtype=float)
         self._num_path_points = 0
         self._current_point_index = 0
@@ -1143,6 +1157,8 @@ class Person:
     def set_direct_pose(self, position, yaw: float | None = None, *, stop: bool = True):
         self._external_motion.clear()
         self._clear_external_hold()
+        self._clear_external_terminal_alignment()
+        self._reset_external_motion_mode("direct_pose")
         pos = np.array(position, dtype=float).reshape(3)
         if yaw is None:
             yaw = float(Rotation.from_quat(self._state.orientation).as_euler("xyz")[2])
@@ -1177,12 +1193,28 @@ class Person:
         *,
         timeout_sec: float = 0.5,
         freeze_pose: bool = False,
+        motion_mode: int = 0,
     ):
         """Give an external planner sole authority over root motion."""
         if not self._external_motion.enabled:
             self.stop_motion()
         speed = math.hypot(float(velocity[0]), float(velocity[1]))
-        if freeze_pose:
+        mode = int(motion_mode)
+        if freeze_pose and mode == 0:
+            mode = int(ExternalMotionMode.FREEZE)
+        previous_mode, active_mode = self._external_motion_mode.transition(mode)
+        if previous_mode != active_mode:
+            current_yaw = float(
+                Rotation.from_quat(self._state.orientation).as_euler("xyz")[2]
+            )
+            carb.log_info(
+                f"External pedestrian mode {self._stage_prefix}: "
+                f"{previous_mode.name}->{active_mode.name}, "
+                f"target_yaw={float(yaw):.3f}, actual_yaw={current_yaw:.3f}, "
+                f"speed={speed:.3f}"
+            )
+        if active_mode == ExternalMotionMode.FREEZE:
+            self._clear_external_terminal_alignment()
             if self._external_hold_position is None:
                 self._external_hold_position = np.array(
                     self._state.position,
@@ -1193,8 +1225,18 @@ class Person:
                     float(yaw),
                     degrees=False,
                 ).as_quat()
+        elif active_mode == ExternalMotionMode.TERMINAL_ALIGN:
+            self._clear_external_hold()
+            if self._external_terminal_position is None:
+                self._external_terminal_position = np.array(
+                    self._state.position,
+                    dtype=float,
+                ).reshape(3)
+                self._external_terminal_complete_logged = False
+            self._external_terminal_yaw = float(yaw)
         else:
             self._clear_external_hold()
+            self._clear_external_terminal_alignment()
         self._external_motion.set_command(
             position=position,
             velocity=velocity,
@@ -1210,6 +1252,21 @@ class Person:
     def _clear_external_hold(self) -> None:
         self._external_hold_position = None
         self._external_hold_orientation = None
+
+    def _reset_external_motion_mode(self, reason: str) -> None:
+        previous, current = self._external_motion_mode.transition(
+            ExternalMotionMode.LOCOMOTION
+        )
+        if previous != current:
+            carb.log_info(
+                f"External pedestrian mode {self._stage_prefix}: "
+                f"{previous.name}->{current.name}, reason={reason}"
+            )
+
+    def _clear_external_terminal_alignment(self) -> None:
+        self._external_terminal_position = None
+        self._external_terminal_yaw = None
+        self._external_terminal_complete_logged = False
 
     def _apply_external_hold_pose(self) -> None:
         """Keep an idle character at one world pose without moving its parent root."""
@@ -1241,6 +1298,87 @@ class Person:
             except Exception as exc:
                 self._warn_pose_read_throttled(
                     f"Failed to hold external AnimGraph pose for "
+                    f"{self._stage_prefix}: {exc}"
+                )
+                return
+        self._state.position = position
+        self._state.orientation = orientation
+        self._pose_valid = True
+        self._last_valid_pose_time = time.monotonic()
+        self._update_collision_proxy()
+
+    def _advance_external_terminal_alignment(self, dt: float) -> None:
+        """Rotate an idle character toward its semantic terminal yaw."""
+        if (
+            self._external_terminal_position is None
+            or self._external_terminal_yaw is None
+        ):
+            return
+        try:
+            current_yaw = float(
+                Rotation.from_quat(self._state.orientation).as_euler("xyz")[2]
+            )
+            next_yaw = bounded_yaw_step(
+                current_yaw,
+                float(self._external_terminal_yaw),
+                max_rate_radps=self._external_motion_yaw_rate_radps,
+                dt=float(dt),
+            )
+        except (TypeError, ValueError):
+            return
+        remaining_error = math.atan2(
+            math.sin(float(self._external_terminal_yaw) - next_yaw),
+            math.cos(float(self._external_terminal_yaw) - next_yaw),
+        )
+        orientation = Rotation.from_euler(
+            "z",
+            next_yaw,
+            degrees=False,
+        ).as_quat()
+        self._apply_external_terminal_pose(orientation)
+        if (
+            abs(remaining_error) <= 1e-3
+            and not self._external_terminal_complete_logged
+        ):
+            self._external_terminal_complete_logged = True
+            carb.log_info(
+                f"External terminal alignment complete {self._stage_prefix}: "
+                f"target_yaw={float(self._external_terminal_yaw):.3f}, "
+                f"actual_yaw={next_yaw:.3f}, reason=yaw_tolerance"
+            )
+
+    def _apply_external_terminal_pose(self, orientation=None) -> None:
+        if self._external_terminal_position is None:
+            return
+        position = np.array(
+            self._external_terminal_position,
+            dtype=float,
+        ).reshape(3)
+        if orientation is None:
+            orientation = np.array(
+                self._state.orientation,
+                dtype=float,
+            ).reshape(4)
+        else:
+            orientation = np.array(orientation, dtype=float).reshape(4)
+        if self.character_graph is not None:
+            try:
+                self.character_graph.set_world_transform(
+                    carb.Float3(
+                        float(position[0]),
+                        float(position[1]),
+                        float(position[2]),
+                    ),
+                    carb.Float4(
+                        float(orientation[0]),
+                        float(orientation[1]),
+                        float(orientation[2]),
+                        float(orientation[3]),
+                    ),
+                )
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to align external terminal pose for "
                     f"{self._stage_prefix}: {exc}"
                 )
                 return
@@ -1494,6 +1632,9 @@ class Person:
         if self._external_motion.enabled:
             if self._external_hold_position is not None:
                 self._apply_external_hold_pose()
+                return
+            if self._external_terminal_position is not None:
+                self._apply_external_terminal_pose()
                 return
             pose = self._read_character_graph_pose()
             if pose is None:
