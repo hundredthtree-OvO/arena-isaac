@@ -41,9 +41,10 @@ from pedestrian.simulator.logic.people.external_motion import (
     ExternalMotionMode,
     ExternalMotionModeState,
     ExternalMotionState,
-    animation_tracking_sample,
+    animation_walk_blend,
     bounded_yaw_step,
     locomotion_path_points,
+    turn_aware_animation_sample,
 )
 from pedestrian.simulator.logic.people.navigation_safety import (
     LateralAvoidanceCandidate,
@@ -267,9 +268,38 @@ class Person:
                 1.0,
             ),
         )
+        self._external_motion_animation_speed_exponent = max(
+            1e-3,
+            _env_float(
+                "ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_SPEED_EXPONENT",
+                1.0,
+            ),
+        )
         self._external_motion_yaw_rate_radps = max(
             0.0,
-            _env_float("ARENA_ISAAC_EXTERNAL_MOTION_YAW_RATE_RADPS", 1.5),
+            _env_float("ARENA_ISAAC_EXTERNAL_MOTION_YAW_RATE_RADPS", 2.8),
+        )
+        self._external_turn_slow_angle_rad = math.radians(
+            max(
+                0.0,
+                _env_float("ARENA_ISAAC_EXTERNAL_TURN_SLOW_ANGLE_DEG", 20.0),
+            )
+        )
+        self._external_turn_full_slow_angle_rad = math.radians(
+            max(
+                1.0,
+                _env_float(
+                    "ARENA_ISAAC_EXTERNAL_TURN_FULL_SLOW_ANGLE_DEG",
+                    55.0,
+                ),
+            )
+        )
+        self._external_turn_minimum_speed_scale = min(
+            1.0,
+            max(
+                0.0,
+                _env_float("ARENA_ISAAC_EXTERNAL_TURN_MIN_SPEED_SCALE", 0.25),
+            ),
         )
         # A root rebase is visually a teleport.  Keep it opt-in for emergency
         # recovery; normal HuNav control closes the loop using the measured
@@ -422,13 +452,10 @@ class Person:
             # Walk is an AnimGraph blend value, while the external sample is
             # m/s.  Use the tracking command so a lagging visual root can
             # smoothly catch its HuNav reference without a pose teleport.
-            speed = min(
-                1.0,
-                max(
-                    0.0,
-                    float(external_sample.speed)
-                    / self._external_motion_animation_full_speed_mps,
-                ),
+            speed = animation_walk_blend(
+                float(external_sample.speed),
+                full_speed_mps=self._external_motion_animation_full_speed_mps,
+                speed_exponent=self._external_motion_animation_speed_exponent,
             )
         if self._last_walk_speed is None or abs(float(self._last_walk_speed) - speed) > 1e-4:
             self._set_anim_variable("Walk", speed)
@@ -1390,11 +1417,21 @@ class Person:
 
     def _external_animation_sample(self, reference_sample):
         """Let MotionMatching move the root while it tracks HuNav's reference."""
-        return animation_tracking_sample(
+        try:
+            current_yaw = float(
+                Rotation.from_quat(self._state.orientation).as_euler("xyz")[2]
+            )
+        except (TypeError, ValueError):
+            current_yaw = float(reference_sample.yaw)
+        return turn_aware_animation_sample(
             reference_sample,
             self._state.position,
+            current_yaw,
             tracking_gain=self._external_motion_tracking_gain,
             max_speed_mps=self._external_motion_max_speed_mps,
+            slow_angle_rad=self._external_turn_slow_angle_rad,
+            full_slow_angle_rad=self._external_turn_full_slow_angle_rad,
+            minimum_speed_scale=self._external_turn_minimum_speed_scale,
         )
 
     def _apply_external_motion_sample(self, sample):

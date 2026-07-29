@@ -219,6 +219,16 @@ pedestrians:
   robot_interaction_policy: avoid
   physics_proxy_enabled: true
   hard_guard_enabled: false
+  # People Walk is an animation blend, not a metric speed. This calibration
+  # compensates its nonlinear root-motion response to HuNav velocities.
+  external_motion_animation_full_speed_mps: 0.8
+  external_motion_animation_speed_exponent: 3.0
+  # The stock People graph is forward-walk only. Slow through sharper turns
+  # while keeping AnimGraph PathPoints authoritative over the locomotion root.
+  external_turn_slow_angle_deg: 20.0
+  external_turn_full_slow_angle_deg: 55.0
+  external_turn_min_speed_scale: 0.25
+  external_turn_yaw_rate_radps: 2.8
   hard_guard_margin_m: 0.04
   hard_guard_control_latency_sec: 0.10
   hard_guard_sample_dt_sec: 0.04

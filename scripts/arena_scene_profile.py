@@ -216,6 +216,27 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
             env[env_name] = str(pedestrians.get(key))
         else:
             env.pop(env_name, None)
+    for key, env_name in (
+        (
+            "external_motion_animation_full_speed_mps",
+            "ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_FULL_SPEED_MPS",
+        ),
+        (
+            "external_motion_animation_speed_exponent",
+            "ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_SPEED_EXPONENT",
+        ),
+        ("external_turn_slow_angle_deg", "ARENA_ISAAC_EXTERNAL_TURN_SLOW_ANGLE_DEG"),
+        (
+            "external_turn_full_slow_angle_deg",
+            "ARENA_ISAAC_EXTERNAL_TURN_FULL_SLOW_ANGLE_DEG",
+        ),
+        ("external_turn_min_speed_scale", "ARENA_ISAAC_EXTERNAL_TURN_MIN_SPEED_SCALE"),
+        ("external_turn_yaw_rate_radps", "ARENA_ISAAC_EXTERNAL_MOTION_YAW_RATE_RADPS"),
+    ):
+        if pedestrians.get(key) is not None:
+            env[env_name] = str(pedestrians.get(key))
+        else:
+            env.pop(env_name, None)
 
 
     # V16 robot geometry / lidar / actual odom-tf settings.  These are consumed

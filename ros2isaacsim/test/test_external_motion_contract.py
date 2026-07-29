@@ -40,7 +40,7 @@ class TestExternalMotionContract(unittest.TestCase):
         self.assertIn('"PathPoints"', source)
         self.assertIn('"Action", "None"', source)
         self.assertIn("[carb.Float3(*point) for point in points]", source)
-        self.assertIn("animation_tracking_sample", source)
+        self.assertIn("turn_aware_animation_sample", source)
         self.assertIn("_external_motion_hard_sync_distance_m", source)
         self.assertIn("self._external_hold_position", source)
         self.assertIn("self._apply_external_hold_pose()", update_source)

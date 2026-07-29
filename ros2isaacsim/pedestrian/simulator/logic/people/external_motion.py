@@ -123,6 +123,20 @@ def locomotion_path_points(
     )
 
 
+def animation_walk_blend(
+    speed_mps: float,
+    *,
+    full_speed_mps: float,
+    speed_exponent: float = 1.0,
+) -> float:
+    """Map metric target speed onto the nonlinear People Walk blend."""
+    speed = max(0.0, float(speed_mps))
+    full_speed = max(1e-6, float(full_speed_mps))
+    exponent = max(1e-3, float(speed_exponent))
+    normalized = min(1.0, speed / full_speed)
+    return normalized ** (1.0 / exponent)
+
+
 def animation_tracking_sample(
     reference: ExternalMotionSample,
     current_position: Sequence[float],
@@ -163,6 +177,57 @@ def animation_tracking_sample(
         velocity=(velocity_x, velocity_y, 0.0),
         yaw=yaw,
         speed=speed,
+        expired=False,
+    )
+
+
+def turn_aware_animation_sample(
+    reference: ExternalMotionSample,
+    current_position: Sequence[float],
+    current_yaw: float,
+    *,
+    tracking_gain: float = 1.5,
+    max_speed_mps: float = 1.2,
+    slow_angle_rad: float = math.radians(20.0),
+    full_slow_angle_rad: float = math.radians(55.0),
+    minimum_speed_scale: float = 0.25,
+) -> ExternalMotionSample:
+    """Slow forward-only locomotion through turns without rebasing its root."""
+    sample = animation_tracking_sample(
+        reference,
+        current_position,
+        tracking_gain=tracking_gain,
+        max_speed_mps=max_speed_mps,
+    )
+    if sample.expired or sample.speed <= 1e-6:
+        return sample
+
+    target_yaw = math.atan2(sample.velocity[1], sample.velocity[0])
+    error = math.atan2(
+        math.sin(target_yaw - float(current_yaw)),
+        math.cos(target_yaw - float(current_yaw)),
+    )
+    error_magnitude = abs(error)
+    full_slow_angle = max(1e-3, float(full_slow_angle_rad))
+    slow_angle = min(full_slow_angle, max(0.0, float(slow_angle_rad)))
+    if error_magnitude <= slow_angle or full_slow_angle <= slow_angle + 1e-6:
+        return sample
+    fraction = min(
+        1.0,
+        (error_magnitude - slow_angle) / (full_slow_angle - slow_angle),
+    )
+    minimum_scale = min(1.0, max(0.0, float(minimum_speed_scale)))
+    scale = max(minimum_scale, 1.0 - fraction)
+    velocity = (
+        sample.velocity[0] * scale,
+        sample.velocity[1] * scale,
+        sample.velocity[2],
+    )
+    return ExternalMotionSample(
+        position=sample.position,
+        velocity=velocity,
+        yaw=target_yaw,
+        speed=sample.speed * scale,
         expired=False,
     )
 

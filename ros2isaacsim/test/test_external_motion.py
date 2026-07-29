@@ -5,13 +5,44 @@ from pedestrian.simulator.logic.people.external_motion import (
     ExternalMotionModeState,
     ExternalMotionSample,
     ExternalMotionState,
+    animation_walk_blend,
     animation_tracking_sample,
     bounded_yaw_step,
     locomotion_path_points,
+    turn_aware_animation_sample,
 )
 
 
 class TestExternalMotionState(unittest.TestCase):
+    def test_animation_walk_blend_compensates_nonlinear_root_motion(self):
+        blend = animation_walk_blend(
+            0.4,
+            full_speed_mps=0.8,
+            speed_exponent=3.0,
+        )
+
+        self.assertAlmostEqual(blend, 0.5 ** (1.0 / 3.0))
+
+    def test_animation_walk_blend_clamps_at_full_speed(self):
+        self.assertEqual(
+            animation_walk_blend(
+                1.2,
+                full_speed_mps=0.8,
+                speed_exponent=3.0,
+            ),
+            1.0,
+        )
+
+    def test_animation_walk_blend_preserves_idle(self):
+        self.assertEqual(
+            animation_walk_blend(
+                0.0,
+                full_speed_mps=0.8,
+                speed_exponent=3.0,
+            ),
+            0.0,
+        )
+
     def test_motion_mode_state_reports_explicit_transitions(self):
         state = ExternalMotionModeState()
 
@@ -141,6 +172,67 @@ class TestExternalMotionState(unittest.TestCase):
         self.assertTrue(sample.expired)
         self.assertEqual(sample.position, (1.7, 0.0, 0.0))
         self.assertEqual(sample.speed, 0.0)
+
+    def test_turn_aware_tracking_keeps_animgraph_walking_through_large_turn(self):
+        reference = ExternalMotionSample(
+            position=(0.0, 0.0, 0.0),
+            velocity=(0.0, 0.6, 0.0),
+            yaw=1.57,
+            speed=0.6,
+            expired=False,
+        )
+
+        sample = turn_aware_animation_sample(
+            reference,
+            current_position=(0.0, 0.0, 0.0),
+            current_yaw=0.0,
+            full_slow_angle_rad=1.0,
+            minimum_speed_scale=0.25,
+        )
+
+        self.assertGreater(sample.speed, 0.0)
+        self.assertAlmostEqual(sample.speed, reference.speed * 0.25)
+        self.assertAlmostEqual(sample.yaw, 1.57079632679)
+
+    def test_turn_aware_tracking_slows_a_moderate_heading_change(self):
+        reference = ExternalMotionSample(
+            position=(0.0, 0.0, 0.0),
+            velocity=(0.4, 0.4, 0.0),
+            yaw=0.785,
+            speed=0.566,
+            expired=False,
+        )
+
+        sample = turn_aware_animation_sample(
+            reference,
+            current_position=(0.0, 0.0, 0.0),
+            current_yaw=0.0,
+            slow_angle_rad=0.3,
+            full_slow_angle_rad=1.0,
+            minimum_speed_scale=0.25,
+        )
+
+        self.assertGreater(sample.speed, 0.0)
+        self.assertLess(sample.speed, reference.speed)
+
+    def test_turn_aware_tracking_preserves_small_heading_change(self):
+        reference = ExternalMotionSample(
+            position=(0.0, 0.0, 0.0),
+            velocity=(1.0, 0.0, 0.0),
+            yaw=0.0,
+            speed=1.0,
+            expired=False,
+        )
+
+        sample = turn_aware_animation_sample(
+            reference,
+            current_position=(0.0, 0.0, 0.0),
+            current_yaw=0.1,
+            slow_angle_rad=0.3,
+            full_slow_angle_rad=1.0,
+        )
+
+        self.assertAlmostEqual(sample.speed, reference.speed)
 
     def test_bounded_yaw_step_uses_shortest_arc(self):
         step = bounded_yaw_step(

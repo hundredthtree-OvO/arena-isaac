@@ -66,6 +66,21 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC"], "0.25")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC"], "0.35")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M"], "0.015")
+        self.assertEqual(
+            env["ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_FULL_SPEED_MPS"],
+            "0.8",
+        )
+        self.assertEqual(
+            env["ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_SPEED_EXPONENT"],
+            "3.0",
+        )
+        self.assertEqual(env["ARENA_ISAAC_EXTERNAL_TURN_SLOW_ANGLE_DEG"], "20.0")
+        self.assertEqual(
+            env["ARENA_ISAAC_EXTERNAL_TURN_FULL_SLOW_ANGLE_DEG"],
+            "55.0",
+        )
+        self.assertEqual(env["ARENA_ISAAC_EXTERNAL_TURN_MIN_SPEED_SCALE"], "0.25")
+        self.assertEqual(env["ARENA_ISAAC_EXTERNAL_MOTION_YAW_RATE_RADPS"], "2.8")
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"], "restore_selected_meshes")
         self.assertEqual(
             env["ARENA_ISAAC_SCENE_DOOR_COLLISION_TARGETS"],
