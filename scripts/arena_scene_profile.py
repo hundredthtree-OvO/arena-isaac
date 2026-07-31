@@ -202,6 +202,25 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"] = (
             "true" if bool(pedestrians.get("hard_guard_enabled")) else "false"
         )
+    if pedestrians.get("visual_envelope_enabled") is not None:
+        env["ARENA_ISAAC_ENABLE_PEDESTRIAN_VISUAL_ENVELOPE"] = (
+            "true" if bool(pedestrians.get("visual_envelope_enabled")) else "false"
+        )
+    for key, env_name in (
+        ("visual_envelope_hz", "ARENA_ISAAC_PEDESTRIAN_VISUAL_ENVELOPE_HZ"),
+        (
+            "visual_envelope_radius_m",
+            "ARENA_ISAAC_PEDESTRIAN_VISUAL_ENVELOPE_RADIUS_M",
+        ),
+        (
+            "visual_envelope_segment_spacing_m",
+            "ARENA_ISAAC_PEDESTRIAN_VISUAL_ENVELOPE_SEGMENT_SPACING_M",
+        ),
+    ):
+        if pedestrians.get(key) is not None:
+            env[env_name] = str(pedestrians.get(key))
+        else:
+            env.pop(env_name, None)
     for key, env_name in (
         ("hard_guard_margin_m", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_MARGIN_M"),
         ("hard_guard_control_latency_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_LATENCY_SEC"),

@@ -19,3 +19,20 @@ def parking_pose_for_name(
         float(origin[1]) + float(slot // column_count) * float(spacing_m),
         float(origin[2]),
     ]
+
+
+def park_all_people(manager) -> int:
+    """Park unique managed people while preserving aliases for reactivation."""
+    seen = set()
+    parked = 0
+    for person in list((getattr(manager, "people", {}) or {}).values()):
+        if id(person) in seen:
+            continue
+        seen.add(id(person))
+        stage_prefix = str(getattr(person, "_stage_prefix", "") or "")
+        park = getattr(person, "park", None)
+        if not stage_prefix or not callable(park):
+            continue
+        park(parking_pose_for_name(stage_prefix))
+        parked += 1
+    return parked

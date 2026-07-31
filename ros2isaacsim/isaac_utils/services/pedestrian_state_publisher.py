@@ -18,6 +18,7 @@ from .pedestrian_state_utils import (
     estimate_pedestrian_velocity,
     iter_unique_people,
     pedestrian_state_publishable,
+    pedestrian_state_reliable,
     pedestrian_state_tags,
     pedestrian_state_tagnames,
 )
@@ -94,7 +95,9 @@ class PedestrianStatePublisher:
                     tuple(float(position[index]) for index in range(3)),
                 )
             entry.velocity = Point(x=velocity[0], y=velocity[1], z=velocity[2])
-            entry.reliability = 1.0 if pose_valid else 0.0
+            entry.reliability = (
+                1.0 if pedestrian_state_reliable(person) else 0.0
+            )
             entry.tagnames = list(pedestrian_state_tagnames())
             entry.tags = pedestrian_state_tags(person)
             msg.people.append(entry)

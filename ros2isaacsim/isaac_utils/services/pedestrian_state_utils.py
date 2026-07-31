@@ -27,6 +27,13 @@ def pedestrian_state_publishable(person) -> bool:
     )
 
 
+def pedestrian_state_reliable(person) -> bool:
+    """Keep an idle active pedestrian present through AnimGraph read gaps."""
+    if bool(getattr(person, "_pose_valid", False)):
+        return True
+    return str(getattr(person, "_motion_state", "")).strip().lower() == "idle"
+
+
 def pedestrian_state_tagnames() -> tuple[str, ...]:
     return (
         "isaac",

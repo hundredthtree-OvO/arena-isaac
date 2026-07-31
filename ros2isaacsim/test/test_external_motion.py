@@ -54,6 +54,10 @@ class TestExternalMotionState(unittest.TestCase):
         self.assertEqual(previous, ExternalMotionMode.FREEZE)
         self.assertEqual(current, ExternalMotionMode.TERMINAL_ALIGN)
 
+        previous, current = state.transition(ExternalMotionMode.REPLAY_TRACK)
+        self.assertEqual(previous, ExternalMotionMode.TERMINAL_ALIGN)
+        self.assertEqual(current, ExternalMotionMode.REPLAY_TRACK)
+
     def test_motion_mode_state_rejects_unknown_modes(self):
         state = ExternalMotionModeState()
 

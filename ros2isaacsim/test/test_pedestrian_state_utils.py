@@ -17,6 +17,7 @@ SPEC.loader.exec_module(PEDESTRIAN_STATE_UTILS)
 iter_unique_people = PEDESTRIAN_STATE_UTILS.iter_unique_people
 estimate_pedestrian_velocity = PEDESTRIAN_STATE_UTILS.estimate_pedestrian_velocity
 pedestrian_state_publishable = PEDESTRIAN_STATE_UTILS.pedestrian_state_publishable
+pedestrian_state_reliable = PEDESTRIAN_STATE_UTILS.pedestrian_state_reliable
 pedestrian_state_tags = PEDESTRIAN_STATE_UTILS.pedestrian_state_tags
 pedestrian_state_tagnames = PEDESTRIAN_STATE_UTILS.pedestrian_state_tagnames
 pedestrian_state_yaw = PEDESTRIAN_STATE_UTILS.pedestrian_state_yaw
@@ -78,6 +79,18 @@ class TestPedestrianStateUtils(unittest.TestCase):
         self.assertTrue(pedestrian_state_publishable(_DummyPerson()))
         self.assertFalse(pedestrian_state_publishable(_DummyPerson(parked=True)))
         self.assertFalse(pedestrian_state_publishable(_DummyPerson(active=False)))
+
+    def test_idle_person_keeps_reliable_last_pose_during_read_gap(self):
+        self.assertTrue(
+            pedestrian_state_reliable(
+                _DummyPerson(pose_valid=False, motion_state="idle")
+            )
+        )
+        self.assertFalse(
+            pedestrian_state_reliable(
+                _DummyPerson(pose_valid=False, motion_state="executing")
+            )
+        )
 
     def test_pedestrian_state_tags_append_guard_fields_without_removing_existing_ones(self):
         person = _DummyPerson(

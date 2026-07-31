@@ -940,6 +940,16 @@ class Person:
                 self._set_idle_animation()
                 self._advance_external_terminal_alignment(dt)
                 return
+            if self._external_motion_mode.mode == ExternalMotionMode.REPLAY_TRACK:
+                self._apply_external_replay_pose(external_sample)
+                if self._external_motion.should_walk(external_sample):
+                    self._set_walk_animation(
+                        external_sample.position,
+                        external_sample=external_sample,
+                    )
+                else:
+                    self._set_idle_animation()
+                return
             self._apply_external_motion_sample(external_sample)
             animation_sample = self._external_animation_sample(external_sample)
             if self._external_motion.should_walk(animation_sample):
@@ -1457,6 +1467,43 @@ class Person:
                 )
         self._target_speed = float(sample.speed)
         self._motion_state = "idle" if sample.expired else "executing"
+
+    def _apply_external_replay_pose(self, sample) -> None:
+        """Apply a frozen Replay Track sample without changing HuNav authority."""
+        position = np.array(sample.position, dtype=float).reshape(3)
+        orientation = Rotation.from_euler(
+            "z",
+            float(sample.yaw),
+            degrees=False,
+        ).as_quat()
+        if self.character_graph is not None:
+            try:
+                self.character_graph.set_world_transform(
+                    carb.Float3(
+                        float(position[0]),
+                        float(position[1]),
+                        float(position[2]),
+                    ),
+                    carb.Float4(
+                        float(orientation[0]),
+                        float(orientation[1]),
+                        float(orientation[2]),
+                        float(orientation[3]),
+                    ),
+                )
+            except Exception as exc:
+                self._warn_pose_read_throttled(
+                    f"Failed to apply Replay Track pose for "
+                    f"{self._stage_prefix}: {exc}"
+                )
+                return
+        self._state.position = position
+        self._state.orientation = orientation
+        self._pose_valid = True
+        self._last_valid_pose_time = time.monotonic()
+        self._target_speed = float(sample.speed)
+        self._motion_state = "idle" if sample.expired else "executing"
+        self._update_collision_proxy()
 
     def _track_external_stationary_yaw(self, sample, dt: float) -> None:
         """Finish a HuNav terminal heading without translating the character."""

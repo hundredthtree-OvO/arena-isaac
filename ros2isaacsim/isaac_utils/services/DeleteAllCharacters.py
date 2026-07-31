@@ -1,7 +1,6 @@
-import time
-
-import omni.kit.commands as commands
 from pedestrian.simulator.logic.people_manager import PeopleManager
+from isaac_utils.managers.door_manager import door_manager
+from isaac_utils.pedestrian_pool import park_all_people
 
 from isaacsim_msgs.srv import DeletePrim
 
@@ -10,20 +9,8 @@ from .utils import safe
 
 @safe
 def characters_delete(request, response):
-    commands.execute(
-        "IsaacSimDestroyPrim",
-        prim_path=request.name,
-    )
-    try:
-        commands.execute(
-            "IsaacSimDestroyPrim",
-            prim_path="/World/CharactersCollision",
-        )
-    except Exception:
-        pass
-    PeopleManager.get_people_manager().remove_all_people()
-    time.sleep(0.5)
-
+    park_all_people(PeopleManager.get_people_manager())
+    door_manager.reset()
     response.ret = True
     return response
 

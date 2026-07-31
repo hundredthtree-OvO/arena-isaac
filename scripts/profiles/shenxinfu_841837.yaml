@@ -219,6 +219,11 @@ pedestrians:
   robot_interaction_policy: avoid
   physics_proxy_enabled: true
   hard_guard_enabled: false
+  # Observe animated skeleton clearance without changing pedestrian motion.
+  visual_envelope_enabled: true
+  visual_envelope_hz: 2.0
+  visual_envelope_radius_m: 0.08
+  visual_envelope_segment_spacing_m: 0.05
   # People Walk is an animation blend, not a metric speed. This calibration
   # compensates its nonlinear root-motion response to HuNav velocities.
   external_motion_animation_full_speed_mps: 0.8

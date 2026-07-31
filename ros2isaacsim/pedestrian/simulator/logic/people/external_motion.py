@@ -12,6 +12,7 @@ class ExternalMotionMode(IntEnum):
     LOCOMOTION = 0
     FREEZE = 1
     TERMINAL_ALIGN = 2
+    REPLAY_TRACK = 3
 
 
 class ExternalMotionModeState:
