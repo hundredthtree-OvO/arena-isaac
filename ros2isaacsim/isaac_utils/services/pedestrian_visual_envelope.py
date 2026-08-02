@@ -18,9 +18,42 @@ from typing import Any, Callable, Iterable, Sequence
 _SKELETON_RESOLVE_FAILURES: dict[str, str] = {}
 
 
+@dataclass(frozen=True)
+class _SkeletonTopologyCacheEntry:
+    person_identity: int
+    joint_order: tuple[str, ...]
+    parent_indices: tuple[int, ...]
+
+
+# Cache only immutable Python values. Holding UsdSkel.Cache or query objects
+# here would keep native stage resources alive across pedestrian lifecycles.
+_SKELETON_TOPOLOGY_CACHE: dict[str, _SkeletonTopologyCacheEntry] = {}
+
+
 def _skeleton_failure(root_path: str, reason: str):
     _SKELETON_RESOLVE_FAILURES[str(root_path)] = str(reason)
     return None
+
+
+def _cached_skeleton_topology(
+    person,
+    root_path: str,
+) -> _SkeletonTopologyCacheEntry | None:
+    entry = _SKELETON_TOPOLOGY_CACHE.get(str(root_path))
+    if entry is None or entry.person_identity != id(person):
+        return None
+    return entry
+
+
+def _prune_skeleton_topology_cache(people_by_alias: dict[str, object] | None) -> None:
+    active = {
+        str(root_path): id(person)
+        for _agent_id, person, root_path in iter_active_people(people_by_alias)
+    }
+    for root_path, entry in tuple(_SKELETON_TOPOLOGY_CACHE.items()):
+        if active.get(root_path) != entry.person_identity:
+            _SKELETON_TOPOLOGY_CACHE.pop(root_path, None)
+            _SKELETON_RESOLVE_FAILURES.pop(root_path, None)
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -473,50 +506,67 @@ def resolve_skeleton_data(person, root_path: str) -> SkeletonVisualEnvelopeData 
         return _skeleton_failure(root_path, "stage_unavailable")
     root_prim = stage.GetPrimAtPath(root_path)
     if root_prim is None or not root_prim.IsValid():
+        _SKELETON_TOPOLOGY_CACHE.pop(str(root_path), None)
         return _skeleton_failure(root_path, "skel_root_prim_invalid")
 
-    skel_root = UsdSkel.Root(root_prim)
-    if not skel_root:
-        return _skeleton_failure(
-            root_path,
-            f"not_skel_root:{root_prim.GetTypeName()}",
-        )
+    topology_entry = _cached_skeleton_topology(person, root_path)
+    if topology_entry is None:
+        skel_root = UsdSkel.Root(root_prim)
+        if not skel_root:
+            return _skeleton_failure(
+                root_path,
+                f"not_skel_root:{root_prim.GetTypeName()}",
+            )
 
-    skeleton_prim = _find_skeleton_prim(root_prim, UsdSkel, Usd)
-    if skeleton_prim is None:
-        return _skeleton_failure(root_path, "skeleton_prim_not_found")
+        skeleton_prim = _find_skeleton_prim(root_prim, UsdSkel, Usd)
+        if skeleton_prim is None:
+            return _skeleton_failure(root_path, "skeleton_prim_not_found")
 
-    cache = UsdSkel.Cache()
-    try:
-        cache.Populate(skel_root)
-    except Exception:
+        # Building and populating this native cache for every 2 Hz sample leaks
+        # Kit/USD allocations on Isaac Sim 4.5. Build it once per character
+        # instance, copy out topology, and release all native handles here.
+        cache = UsdSkel.Cache()
         try:
-            cache.Populate(skel_root, Usd.TraverseInstanceProxies())
+            cache.Populate(skel_root)
+        except Exception:
+            try:
+                cache.Populate(skel_root, Usd.TraverseInstanceProxies())
+            except Exception as exc:
+                return _skeleton_failure(
+                    root_path,
+                    f"cache_populate_failed:{type(exc).__name__}",
+                )
+
+        skeleton = UsdSkel.Skeleton(skeleton_prim)
+        query = cache.GetSkelQuery(skeleton)
+        try:
+            if not query:
+                return _skeleton_failure(root_path, "skeleton_query_invalid")
+        except Exception:
+            return _skeleton_failure(root_path, "skeleton_query_validation_failed")
+
+        try:
+            topology = query.GetTopology()
+            parent_indices = tuple(
+                int(index) for index in topology.GetParentIndices()
+            )
+            joint_order = tuple(str(token) for token in query.GetJointOrder())
         except Exception as exc:
             return _skeleton_failure(
                 root_path,
-                f"cache_populate_failed:{type(exc).__name__}",
+                f"topology_failed:{type(exc).__name__}",
             )
-
-    skeleton = UsdSkel.Skeleton(skeleton_prim)
-    query = cache.GetSkelQuery(skeleton)
-    try:
-        if not query:
-            return _skeleton_failure(root_path, "skeleton_query_invalid")
-    except Exception:
-        return _skeleton_failure(root_path, "skeleton_query_validation_failed")
-
-    try:
-        topology = query.GetTopology()
-        parent_indices = tuple(int(index) for index in topology.GetParentIndices())
-        joint_order = tuple(str(token) for token in query.GetJointOrder())
-    except Exception as exc:
-        return _skeleton_failure(
-            root_path,
-            f"topology_failed:{type(exc).__name__}",
+        if len(joint_order) != len(parent_indices):
+            return _skeleton_failure(root_path, "joint_order_size_mismatch")
+        topology_entry = _SkeletonTopologyCacheEntry(
+            person_identity=id(person),
+            joint_order=joint_order,
+            parent_indices=parent_indices,
         )
-    if len(joint_order) != len(parent_indices):
-        return _skeleton_failure(root_path, "joint_order_size_mismatch")
+        _SKELETON_TOPOLOGY_CACHE[str(root_path)] = topology_entry
+
+    joint_order = topology_entry.joint_order
+    parent_indices = topology_entry.parent_indices
 
     character_graph = getattr(person, "character_graph", None)
     if character_graph is None:
@@ -643,6 +693,13 @@ class PedestrianVisualEnvelopeMonitor:
         people_by_alias = self._people_by_alias()
         if people_by_alias is None:
             return
+        _prune_skeleton_topology_cache(people_by_alias)
+        if self._log_path is None:
+            try:
+                if self._publisher.get_subscription_count() <= 0:
+                    return
+            except Exception:
+                pass
         payload = collect_visual_envelope_payload(
             people_by_alias,
             skeleton_resolver=resolve_skeleton_data,

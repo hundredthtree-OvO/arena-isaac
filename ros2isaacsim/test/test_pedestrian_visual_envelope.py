@@ -1,4 +1,5 @@
 import os
+from types import ModuleType
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -40,6 +41,21 @@ pedestrian_visual_envelope_config_from_env = (
 sample_visual_envelope_points = (
     PEDESTRIAN_VISUAL_ENVELOPE.sample_visual_envelope_points
 )
+resolve_skeleton_data = (
+    PEDESTRIAN_VISUAL_ENVELOPE.resolve_skeleton_data
+)
+cached_skeleton_topology = (
+    PEDESTRIAN_VISUAL_ENVELOPE._cached_skeleton_topology
+)
+prune_skeleton_topology_cache = (
+    PEDESTRIAN_VISUAL_ENVELOPE._prune_skeleton_topology_cache
+)
+SkeletonTopologyCacheEntry = (
+    PEDESTRIAN_VISUAL_ENVELOPE._SkeletonTopologyCacheEntry
+)
+SKELETON_TOPOLOGY_CACHE = (
+    PEDESTRIAN_VISUAL_ENVELOPE._SKELETON_TOPOLOGY_CACHE
+)
 
 
 class _DummyPerson:
@@ -65,6 +81,9 @@ class _FakePrim:
 
 
 class TestPedestrianVisualEnvelope(unittest.TestCase):
+    def tearDown(self):
+        SKELETON_TOPOLOGY_CACHE.clear()
+
     def test_env_defaults_are_enabled_and_tunable(self):
         env = {
             "ARENA_ISAAC_ENABLE_PEDESTRIAN_VISUAL_ENVELOPE": "false",
@@ -133,6 +152,137 @@ class TestPedestrianVisualEnvelope(unittest.TestCase):
             Skeleton = "Skeleton"
 
         self.assertIs(find_skeleton_prim(skel_root, _FakeUsdSkel), skeleton)
+
+    def test_topology_cache_is_scoped_to_character_instance(self):
+        root_path = "/World/Characters/toilet_agent_01/SkelRoot"
+        person = _DummyPerson("toilet_agent_01", root_path)
+        entry = SkeletonTopologyCacheEntry(
+            person_identity=id(person),
+            joint_order=("Root", "Spine"),
+            parent_indices=(-1, 0),
+        )
+        SKELETON_TOPOLOGY_CACHE[root_path] = entry
+
+        self.assertIs(cached_skeleton_topology(person, root_path), entry)
+        self.assertIsNone(
+            cached_skeleton_topology(
+                _DummyPerson("toilet_agent_01", root_path),
+                root_path,
+            )
+        )
+
+    def test_topology_cache_is_pruned_after_character_leaves(self):
+        root_path = "/World/Characters/toilet_agent_01/SkelRoot"
+        person = _DummyPerson("toilet_agent_01", root_path)
+        SKELETON_TOPOLOGY_CACHE[root_path] = SkeletonTopologyCacheEntry(
+            person_identity=id(person),
+            joint_order=("Root",),
+            parent_indices=(-1,),
+        )
+
+        prune_skeleton_topology_cache({"toilet_agent_01": person})
+        self.assertIn(root_path, SKELETON_TOPOLOGY_CACHE)
+
+        prune_skeleton_topology_cache({})
+        self.assertNotIn(root_path, SKELETON_TOPOLOGY_CACHE)
+
+    def test_skeleton_topology_native_cache_is_built_once_per_character(self):
+        root_path = "/World/Characters/toilet_agent_01/SkelRoot"
+
+        class _Vector(list):
+            def __init__(self, *values):
+                super().__init__(values)
+
+        class _CharacterGraph:
+            def get_joint_transform(self, name, position, _rotation):
+                position[:] = [1.0 if name == "Root" else 2.0, 0.0, 0.0]
+
+        class _Person(_DummyPerson):
+            def __init__(self):
+                super().__init__("toilet_agent_01", root_path)
+                self.character_graph = _CharacterGraph()
+
+        skeleton = _FakePrim("Skeleton")
+        skeleton.IsA = lambda _schema: True
+        skel_root = _FakePrim("SkelRoot", (skeleton,))
+        skel_root.GetTypeName = lambda: "SkelRoot"
+
+        class _Stage:
+            def GetPrimAtPath(self, path):
+                return skel_root if path == root_path else None
+
+        class _Context:
+            def get_stage(self):
+                return _Stage()
+
+        cache_builds = []
+
+        class _Topology:
+            def GetParentIndices(self):
+                return (-1, 0)
+
+        class _Query:
+            def __bool__(self):
+                return True
+
+            def GetTopology(self):
+                return _Topology()
+
+            def GetJointOrder(self):
+                return ("Root", "Root/Spine")
+
+        class _Cache:
+            def __init__(self):
+                cache_builds.append(1)
+
+            def Populate(self, *_args):
+                return None
+
+            def GetSkelQuery(self, _skeleton):
+                return _Query()
+
+        class _Usd:
+            @staticmethod
+            def TraverseInstanceProxies():
+                return None
+
+            @staticmethod
+            def PrimRange(_root, *_args):
+                return (skeleton,)
+
+        class _UsdSkel:
+            Skeleton = staticmethod(lambda prim: prim)
+            Root = staticmethod(lambda prim: prim)
+            Cache = _Cache
+
+        carb_module = ModuleType("carb")
+        carb_module.Float3 = _Vector
+        carb_module.Float4 = _Vector
+        omni_module = ModuleType("omni")
+        omni_module.__path__ = []
+        omni_usd_module = ModuleType("omni.usd")
+        omni_usd_module.get_context = lambda: _Context()
+        omni_module.usd = omni_usd_module
+        pxr_module = ModuleType("pxr")
+        pxr_module.Usd = _Usd
+        pxr_module.UsdSkel = _UsdSkel
+        person = _Person()
+
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "carb": carb_module,
+                "omni": omni_module,
+                "omni.usd": omni_usd_module,
+                "pxr": pxr_module,
+            },
+        ):
+            first = resolve_skeleton_data(person, root_path)
+            second = resolve_skeleton_data(person, root_path)
+
+        self.assertEqual(len(cache_builds), 1)
+        self.assertEqual(first, second)
+        self.assertEqual(first.parent_indices, (-1, 0))
 
     def test_payload_deduplicates_aliases_and_filters_self_hits(self):
         person = _DummyPerson("toilet_agent_01", "/World/Characters/toilet_agent_01/SkelRoot")

@@ -1,0 +1,4 @@
+numpy>=1.21
+
+# The first indexing/extraction stage intentionally does not require Torch,
+# SMPL-X, ROS, or Isaac Sim. Those dependencies belong to a later exporter.

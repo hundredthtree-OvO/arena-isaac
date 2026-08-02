@@ -51,6 +51,7 @@ setup(
             "export_voxel_map=ros2isaacsim.export_voxel_map:main",
             "export_walkable_map=ros2isaacsim.export_walkable_map:main",
             "synthetic_2d_laser=ros2isaacsim.synthetic_2d_laser:main",
+            "pedestrian_speed_calibration=ros2isaacsim.pedestrian_speed_calibration:main",
         ],
     },
 )

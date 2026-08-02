@@ -226,8 +226,8 @@ pedestrians:
   visual_envelope_segment_spacing_m: 0.05
   # People Walk is an animation blend, not a metric speed. This calibration
   # compensates its nonlinear root-motion response to HuNav velocities.
-  external_motion_animation_full_speed_mps: 0.8
-  external_motion_animation_speed_exponent: 3.0
+  external_motion_animation_full_speed_mps: 0.3082
+  external_motion_animation_speed_exponent: 1.7670
   # The stock People graph is forward-walk only. Slow through sharper turns
   # while keeping AnimGraph PathPoints authoritative over the locomotion root.
   external_turn_slow_angle_deg: 20.0

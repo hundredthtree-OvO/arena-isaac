@@ -1,0 +1,17 @@
+{
+  "graph_id": "right_turn_stop_resume_seed",
+  "motion_ids": {
+    "turn": "turn_right_90_83_37",
+    "stop": "stop_walk_83_36",
+    "resume": "start_walk_83_37"
+  },
+  "transition": {
+    "blend_sec": 0.12,
+    "turn_tail_search_sec": 2.0,
+    "stop_head_search_sec": 0.5,
+    "idle_tail_search_sec": 0.8,
+    "resume_head_search_sec": 1.2,
+    "resume_blend_sec": 0.2
+  },
+  "hold_sec": 1.0
+}

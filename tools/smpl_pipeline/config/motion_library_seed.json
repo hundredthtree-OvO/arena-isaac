@@ -1,0 +1,83 @@
+{
+  "library_id": "cmu_smplh_locomotion_seed",
+  "target_fps": 60.0,
+  "motions": [
+    {
+      "id": "walk_forward_83_37",
+      "category": "walk",
+      "direction": "forward",
+      "source_relative": "83/83_37_poses.npz",
+      "start_sec": 1.633333333,
+      "end_sec": 2.9,
+      "event_start_sec": 1.633333333,
+      "event_end_sec": 2.9,
+      "official_description": "walk forward turn 90 degrees right walk forward"
+    },
+    {
+      "id": "walk_slow_37_01",
+      "category": "walk",
+      "direction": "forward",
+      "source_relative": "37/37_01_poses.npz",
+      "start_sec": 1.433333333,
+      "end_sec": 2.733333333,
+      "event_start_sec": 1.433333333,
+      "event_end_sec": 2.733333333,
+      "official_description": "slow walk"
+    },
+    {
+      "id": "walk_fast_38_01",
+      "category": "walk",
+      "direction": "forward",
+      "source_relative": "38/38_01_poses.npz",
+      "start_sec": 1.483333333,
+      "end_sec": 2.55,
+      "event_start_sec": 1.483333333,
+      "event_end_sec": 2.55,
+      "official_description": "walk"
+    },
+    {
+      "id": "start_walk_83_37",
+      "category": "resume",
+      "direction": "forward",
+      "source_relative": "83/83_37_poses.npz",
+      "start_sec": 0.0,
+      "end_sec": 3.5,
+      "event_start_sec": 0.75,
+      "event_end_sec": 2.0,
+      "official_description": "walk forward turn 90 degrees right walk forward"
+    },
+    {
+      "id": "turn_right_90_83_37",
+      "category": "turn",
+      "direction": "right",
+      "source_relative": "83/83_37_poses.npz",
+      "start_sec": 1.0,
+      "end_sec": 5.5,
+      "event_start_sec": 2.75,
+      "event_end_sec": 5.0,
+      "official_description": "walk forward turn 90 degrees right walk forward"
+    },
+    {
+      "id": "turn_left_90_83_36",
+      "category": "turn",
+      "direction": "left",
+      "source_relative": "83/83_36_poses.npz",
+      "start_sec": 2.5,
+      "end_sec": 5.75,
+      "event_start_sec": 3.5,
+      "event_end_sec": 5.75,
+      "official_description": "walk forward turn 90 degrees left walk forward"
+    },
+    {
+      "id": "stop_walk_83_36",
+      "category": "stop",
+      "direction": "stationary",
+      "source_relative": "83/83_36_poses.npz",
+      "start_sec": 6.4,
+      "end_sec": 8.8,
+      "event_start_sec": 7.0,
+      "event_end_sec": 8.8,
+      "official_description": "walk forward turn 90 degrees left walk forward"
+    }
+  ]
+}
