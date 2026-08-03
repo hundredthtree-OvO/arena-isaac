@@ -17,6 +17,7 @@ class WalkableMapConfig:
     output_path: str
     resolution: float = 0.05
     origin: tuple[float, float, float] = (-2.24, -0.90, 0.75)
+    sample_heights_m: tuple[float, ...] = (0.15, 0.45, 0.75, 1.05)
     world_bounds: tuple[float, float, float, float] = (-4.60, 3.60, -2.10, 1.80)
     exclude_path_keywords: tuple[str, ...] = (
         "/World/Characters",
@@ -75,6 +76,26 @@ def occupancy_grid_from_positions(
         if cell is not None:
             data[cell] = 100
     return data
+
+
+def merge_height_slices(slices: Iterable[Iterable[int]]) -> list[int]:
+    """Project 2D slices into a conservative pedestrian occupancy map."""
+
+    grids = [list(values) for values in slices]
+    if not grids:
+        raise ValueError("at least one height slice is required")
+    cell_count = len(grids[0])
+    if any(len(values) != cell_count for values in grids):
+        raise ValueError("height slices must contain the same number of cells")
+    merged = []
+    for values in zip(*grids):
+        if any(int(value) >= 50 for value in values):
+            merged.append(100)
+        elif any(int(value) == 0 for value in values):
+            merged.append(0)
+        else:
+            merged.append(-1)
+    return merged
 
 
 def _collision_enabled(prim, UsdPhysics) -> bool:
@@ -188,44 +209,71 @@ def build_walkable_map(config: WalkableMapConfig, *, logger=None) -> dict[str, A
         raise RuntimeError(f"scene root does not exist: {config.scene_root}")
     if config.resolution <= 0.0:
         raise ValueError("resolution must be positive")
+    sample_heights = tuple(float(value) for value in config.sample_heights_m)
+    if not sample_heights or not all(math.isfinite(value) for value in sample_heights):
+        raise ValueError("sample_heights_m must contain finite values")
     min_x, max_x, min_y, max_y = config.world_bounds
     if min_x >= max_x or min_y >= max_y:
         raise ValueError("world_bounds must be [min_x, max_x, min_y, max_y]")
 
-    generator = _omap.Generator(
-        omni.physx.acquire_physx_interface(),
-        context.get_stage_id(),
-    )
-    generator.update_settings(float(config.resolution), 4.0, 5.0, 6.0)
-    ox, oy, oz = config.origin
+    ox, oy, _ = config.origin
     lower = (min_x - ox, min_y - oy, 0.0)
     upper = (max_x - ox, max_y - oy, 0.0)
+    slice_grids: list[list[int]] = []
+    width = 0
+    height = 0
+    origin_xy: tuple[float, float] | None = None
     with _static_scene_only(stage, config, UsdPhysics):
-        generator.set_transform(config.origin, lower, upper)
-        generator.generate2d()
+        for sample_height in sample_heights:
+            generator = _omap.Generator(
+                omni.physx.acquire_physx_interface(),
+                context.get_stage_id(),
+            )
+            generator.update_settings(float(config.resolution), 4.0, 5.0, 6.0)
+            generator.set_transform((ox, oy, sample_height), lower, upper)
+            generator.generate2d()
+            dimensions = generator.get_dimensions()
+            slice_width = int(dimensions[0])
+            slice_height = int(dimensions[1])
+            raw = list(generator.get_buffer())
+            if (
+                slice_width <= 0
+                or slice_height <= 0
+                or len(raw) != slice_width * slice_height
+            ):
+                raise RuntimeError(
+                    f"invalid occupancy output at z={sample_height}: "
+                    f"dimensions={slice_width}x{slice_height}, buffer={len(raw)}"
+                )
+            min_bound = generator.get_min_bound()
+            current_origin = (float(min_bound[0]), float(min_bound[1]))
+            if not slice_grids:
+                width, height = slice_width, slice_height
+                origin_xy = current_origin
+            elif (slice_width, slice_height) != (width, height) or any(
+                abs(current - expected) > 1e-6
+                for current, expected in zip(current_origin, origin_xy)
+            ):
+                raise RuntimeError("occupancy height slices do not share one grid transform")
+            slice_grids.append(
+                occupancy_grid_from_positions(
+                    width=width,
+                    height=height,
+                    resolution=config.resolution,
+                    origin_xy=current_origin,
+                    free_positions=generator.get_free_positions(),
+                    occupied_positions=generator.get_occupied_positions(),
+                )
+            )
 
-    dimensions = generator.get_dimensions()
-    width = int(dimensions[0])
-    height = int(dimensions[1])
-    raw = list(generator.get_buffer())
-    if width <= 0 or height <= 0 or len(raw) != width * height:
-        raise RuntimeError(
-            f"invalid occupancy output: dimensions={width}x{height}, buffer={len(raw)}"
-        )
-    min_bound = generator.get_min_bound()
-    data = occupancy_grid_from_positions(
-        width=width,
-        height=height,
-        resolution=config.resolution,
-        origin_xy=(float(min_bound[0]), float(min_bound[1])),
-        free_positions=generator.get_free_positions(),
-        occupied_positions=generator.get_occupied_positions(),
-    )
+    data = merge_height_slices(slice_grids)
     output = Path(config.output_path).expanduser()
     output.parent.mkdir(parents=True, exist_ok=True)
     pgm_path = output.with_suffix(".pgm")
     yaml_path = output.with_suffix(".yaml")
-    origin = [float(min_bound[0]), float(min_bound[1]), 0.0]
+    if origin_xy is None:
+        raise RuntimeError("occupancy generation produced no height slices")
+    origin = [origin_xy[0], origin_xy[1], 0.0]
     payload = {
         "schema": "arena.walkable_map.v1",
         "source": "isaacsim.asset.gen.omap",
@@ -233,7 +281,8 @@ def build_walkable_map(config: WalkableMapConfig, *, logger=None) -> dict[str, A
         "scene_fingerprint": _scene_fingerprint(stage, config.scene_root, UsdPhysics),
         "resolution": float(config.resolution),
         "origin": origin,
-        "sample_height_m": float(oz),
+        "sample_height_m": float(sample_heights[0]),
+        "sample_heights_m": list(sample_heights),
         "width": width,
         "height": height,
         "data": data,
@@ -249,6 +298,6 @@ def build_walkable_map(config: WalkableMapConfig, *, logger=None) -> dict[str, A
     if logger is not None:
         logger.info(
             f"Walkable map exported: output={output}, dimensions={width}x{height}, "
-            f"counts={payload['counts']}"
+            f"heights={list(sample_heights)}, counts={payload['counts']}"
         )
     return payload

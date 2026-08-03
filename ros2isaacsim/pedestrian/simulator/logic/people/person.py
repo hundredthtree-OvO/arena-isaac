@@ -198,6 +198,21 @@ class Person:
             0.0,
             _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC", 0.0),
         )
+        self._hard_body_radius_m = max(
+            0.01,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_BODY_RADIUS_M", 0.26),
+        )
+        self._hard_body_half_length_m = max(
+            0.0,
+            _env_float("ARENA_ISAAC_PEDESTRIAN_HARD_BODY_HALF_LENGTH_M", 0.16),
+        )
+        self._hard_body_axis_sample_spacing_m = max(
+            0.01,
+            _env_float(
+                "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_AXIS_SAMPLE_SPACING_M",
+                0.05,
+            ),
+        )
         self._dynamic_avoidance_default = None
         self._path_point_arrival_radius = _pedestrian_stop_radius()
 
@@ -1796,6 +1811,12 @@ class Person:
             from isaac_utils.mecanum_teleop import mecanum_teleop_manager
         except Exception:
             return None
+        current_yaw = float(
+            Rotation.from_quat(self._state.orientation).as_euler("xyz")[2]
+        )
+        dx = float(candidate_position[0]) - float(self._state.position[0])
+        dy = float(candidate_position[1]) - float(self._state.position[1])
+        candidate_yaw = current_yaw if math.hypot(dx, dy) <= 1e-6 else math.atan2(dy, dx)
         pedestrian = PedestrianGuardState(
             name=str(self._stage_prefix or self._requested_stage_name),
             pos_xy=(
@@ -1806,7 +1827,11 @@ class Person:
                 float(candidate_position[0]),
                 float(candidate_position[1]),
             ),
-            radius=float(Person.collision_proxy_radius),
+            radius=self._hard_body_radius_m,
+            heading=current_yaw,
+            next_heading=candidate_yaw,
+            half_length=self._hard_body_half_length_m,
+            axis_sample_spacing=self._hard_body_axis_sample_spacing_m,
         )
         for robot in list(getattr(mecanum_teleop_manager, "robots", {}).values()):
             getter = getattr(robot, "get_dynamic_guard_state", None)
@@ -1907,11 +1932,21 @@ class Person:
             speed=prediction_speed,
             dt=float(max(0.0, dt)),
         )
+        current_yaw = float(
+            Rotation.from_quat(self._state.orientation).as_euler("xyz")[2]
+        )
+        dx = float(next_pos_xy[0]) - float(pos_xy[0])
+        dy = float(next_pos_xy[1]) - float(pos_xy[1])
+        next_yaw = current_yaw if math.hypot(dx, dy) <= 1e-6 else math.atan2(dy, dx)
         return PedestrianGuardState(
             name=str(self._stage_prefix or self._requested_stage_name),
             pos_xy=pos_xy,
             next_pos_xy=next_pos_xy,
-            radius=float(Person.collision_proxy_radius),
+            radius=self._hard_body_radius_m,
+            heading=current_yaw,
+            next_heading=next_yaw,
+            half_length=self._hard_body_half_length_m,
+            axis_sample_spacing=self._hard_body_axis_sample_spacing_m,
         )
 
     def _robot_guard_allows_motion(self, dt: float, active_goal) -> bool:
@@ -1982,6 +2017,10 @@ class Person:
                 + self._hard_guard_margin_m
                 + max(0.0, float(extra_margin_m))
             ),
+            heading=ped_state.heading,
+            next_heading=ped_state.next_heading,
+            half_length=ped_state.half_length,
+            axis_sample_spacing=ped_state.axis_sample_spacing,
         )
         for robot in list(getattr(manager, "robots", {}).values()):
             getter = getattr(robot, "get_dynamic_guard_state", None)

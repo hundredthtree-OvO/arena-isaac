@@ -5,6 +5,7 @@ import unittest
 from isaac_utils.walkable_map_builder import (
     _write_map_yaml,
     _write_pgm,
+    merge_height_slices,
     occupancy_grid_from_positions,
     occupancy_values,
 )
@@ -43,6 +44,21 @@ class TestWalkableMapBuilder(unittest.TestCase):
 
         self.assertIn("image: map.pgm", text)
         self.assertIn("origin: [-4.6, -2.1, 0.0]", text)
+
+    def test_height_slices_use_occupied_union(self):
+        merged = merge_height_slices(
+            [
+                [0, 0, -1, -1],
+                [100, 0, 0, -1],
+                [0, 100, -1, 0],
+            ]
+        )
+
+        self.assertEqual(merged, [100, 100, 0, 0])
+
+    def test_height_slice_merge_rejects_mismatched_shapes(self):
+        with self.assertRaisesRegex(ValueError, "same number of cells"):
+            merge_height_slices([[0, 0], [0]])
 
 
 if __name__ == "__main__":

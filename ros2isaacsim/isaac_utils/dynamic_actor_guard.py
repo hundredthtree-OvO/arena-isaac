@@ -26,6 +26,10 @@ class PedestrianGuardState:
     pos_xy: tuple[float, float]
     next_pos_xy: tuple[float, float]
     radius: float
+    heading: float = 0.0
+    next_heading: float = 0.0
+    half_length: float = 0.0
+    axis_sample_spacing: float = 0.05
 
 
 @dataclass(frozen=True)
@@ -134,13 +138,17 @@ def movement_allowed(current_score: float, next_score: float, *, escape_epsilon:
 
 
 def robot_pedestrian_scores(robot: RobotGuardState, ped: PedestrianGuardState) -> tuple[float, float]:
-    current_score = _circle_footprint_penetration(robot.pos_xy, robot.heading, robot, ped.pos_xy, ped.radius)
+    current_score = _pedestrian_footprint_penetration(
+        robot.pos_xy, robot.heading, robot, ped, ped.pos_xy, ped.heading
+    )
     next_score = _swept_pair_penetration(robot, ped)
     return current_score, next_score
 
 
 def pedestrian_robot_scores(ped: PedestrianGuardState, robot: RobotGuardState) -> tuple[float, float]:
-    current_score = _circle_footprint_penetration(robot.pos_xy, robot.heading, robot, ped.pos_xy, ped.radius)
+    current_score = _pedestrian_footprint_penetration(
+        robot.pos_xy, robot.heading, robot, ped, ped.pos_xy, ped.heading
+    )
     next_score = _swept_pair_penetration(robot, ped)
     return current_score, next_score
 
@@ -162,10 +170,15 @@ def _swept_pair_penetration(
         math.sin(float(robot.next_heading) - float(robot.heading)),
         math.cos(float(robot.next_heading) - float(robot.heading)),
     )
+    pedestrian_heading_delta = math.atan2(
+        math.sin(float(pedestrian.next_heading) - float(pedestrian.heading)),
+        math.cos(float(pedestrian.next_heading) - float(pedestrian.heading)),
+    )
     steps = max(
         1,
         int(math.ceil(max(robot_distance, pedestrian_distance) / 0.03)),
         int(math.ceil(abs(heading_delta) / math.radians(3.0))),
+        int(math.ceil(abs(pedestrian_heading_delta) / math.radians(3.0))),
     )
     worst_score = 0.0
     for step in range(1, steps + 1):
@@ -184,12 +197,13 @@ def _swept_pair_penetration(
             + progress
             * (float(pedestrian.next_pos_xy[1]) - float(pedestrian.pos_xy[1])),
         )
-        score = _circle_footprint_penetration(
+        score = _pedestrian_footprint_penetration(
             robot_xy,
             float(robot.heading) + progress * heading_delta,
             robot,
+            pedestrian,
             pedestrian_xy,
-            pedestrian.radius,
+            float(pedestrian.heading) + progress * pedestrian_heading_delta,
         )
         worst_score = max(worst_score, score)
     return worst_score
@@ -214,12 +228,13 @@ def scale_robot_command_for_pedestrians(
     if not pedestrians:
         return HardGuardResult(float(vx), float(vy), float(wz), 1.0, "clear")
     physical_scores = [
-        _circle_footprint_penetration(
+        _pedestrian_footprint_penetration(
             robot.pos_xy,
             robot.heading,
             robot,
+            pedestrian,
             pedestrian.pos_xy,
-            float(pedestrian.radius),
+            pedestrian.heading,
         )
         for pedestrian in pedestrians
     ]
@@ -269,12 +284,14 @@ def scale_robot_command_for_pedestrians(
         return HardGuardResult(0.0, 0.0, 0.0, 0.0, "overlap_stop", blocked_by)
 
     inflated_scores = [
-        _circle_footprint_penetration(
+        _pedestrian_footprint_penetration(
             robot.pos_xy,
             robot.heading,
             robot,
+            pedestrian,
             pedestrian.pos_xy,
-            float(pedestrian.radius) + max(0.0, float(margin_m)),
+            pedestrian.heading,
+            radius=float(pedestrian.radius) + max(0.0, float(margin_m)),
         )
         for pedestrian in pedestrians
     ]
@@ -499,12 +516,18 @@ def _command_is_safe(
             pedestrian_y = float(pedestrian.pos_xy[1]) + progress * (
                 float(pedestrian.next_pos_xy[1]) - float(pedestrian.pos_xy[1])
             )
-            score = _circle_footprint_penetration(
+            pedestrian_heading_delta = math.atan2(
+                math.sin(float(pedestrian.next_heading) - float(pedestrian.heading)),
+                math.cos(float(pedestrian.next_heading) - float(pedestrian.heading)),
+            )
+            score = _pedestrian_footprint_penetration(
                 (x, y),
                 heading,
                 robot,
+                pedestrian,
                 (pedestrian_x, pedestrian_y),
-                float(pedestrian.radius) + max(0.0, float(margin_m)),
+                float(pedestrian.heading) + progress * pedestrian_heading_delta,
+                radius=float(pedestrian.radius) + max(0.0, float(margin_m)),
             )
             if score > worst_score:
                 worst_score = score
@@ -512,12 +535,14 @@ def _command_is_safe(
             if score > float(max_allowed_penetration) + 1e-9:
                 return False, blocked_by, worst_score
     final_score = max(
-        _circle_footprint_penetration(
+        _pedestrian_footprint_penetration(
             (x, y),
             heading,
             robot,
+            pedestrian,
             pedestrian.next_pos_xy,
-            float(pedestrian.radius) + max(0.0, float(margin_m)),
+            pedestrian.next_heading,
+            radius=float(pedestrian.radius) + max(0.0, float(margin_m)),
         )
         for pedestrian in pedestrians
     )
@@ -546,6 +571,45 @@ def _circle_footprint_penetration(
         box_yaw=float(robot_heading),
         box_half_x=half_x,
         box_half_y=half_y,
+    )
+
+
+def _pedestrian_footprint_penetration(
+    robot_pos_xy: Sequence[float],
+    robot_heading: float,
+    robot: RobotGuardState,
+    pedestrian: PedestrianGuardState,
+    pedestrian_pos_xy: Sequence[float],
+    pedestrian_heading: float,
+    *,
+    radius: float | None = None,
+) -> float:
+    """Return robot-box penetration against the pedestrian's oriented capsule."""
+    half_length = max(0.0, float(pedestrian.half_length))
+    spacing = max(0.01, float(pedestrian.axis_sample_spacing))
+    if half_length <= 1e-9:
+        offsets = (0.0,)
+    else:
+        steps = max(2, int(math.ceil((2.0 * half_length) / spacing)))
+        offsets = tuple(
+            -half_length + (2.0 * half_length * index / steps)
+            for index in range(steps + 1)
+        )
+    c = math.cos(float(pedestrian_heading))
+    s = math.sin(float(pedestrian_heading))
+    effective_radius = float(pedestrian.radius if radius is None else radius)
+    return max(
+        _circle_footprint_penetration(
+            robot_pos_xy,
+            robot_heading,
+            robot,
+            (
+                float(pedestrian_pos_xy[0]) + offset * c,
+                float(pedestrian_pos_xy[1]) + offset * s,
+            ),
+            effective_radius,
+        )
+        for offset in offsets
     )
 
 

@@ -66,6 +66,12 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC"], "0.25")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC"], "0.35")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M"], "0.015")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_BODY_RADIUS_M"], "0.26")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_BODY_HALF_LENGTH_M"], "0.16")
+        self.assertEqual(
+            env["ARENA_ISAAC_PEDESTRIAN_HARD_BODY_AXIS_SAMPLE_SPACING_M"],
+            "0.05",
+        )
         self.assertEqual(
             env["ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_FULL_SPEED_MPS"],
             "0.3082",
@@ -149,6 +155,9 @@ class TestPhysxDiffProfile(unittest.TestCase):
             "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC",
             "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC",
             "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_RADIUS_M",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_HALF_LENGTH_M",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_AXIS_SAMPLE_SPACING_M",
         }
         with mock.patch.dict(os.environ, {key: "stale" for key in contact_keys}):
             command, env = profile_module.bridge_cmd(self.profile, "rtx_scan")

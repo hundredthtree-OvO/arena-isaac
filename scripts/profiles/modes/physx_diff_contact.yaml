@@ -54,6 +54,10 @@ pedestrians:
   hard_guard_release_hold_sec: 0.25
   hard_guard_escape_horizon_sec: 0.35
   hard_guard_overlap_deadband_m: 0.015
+  # Canonical animated-body capsule shared with toilet_benchmark local motion.
+  hard_body_radius_m: 0.26
+  hard_body_half_length_m: 0.16
+  hard_body_axis_sample_spacing_m: 0.05
 
 motion:
   wheel_radius: 0.08

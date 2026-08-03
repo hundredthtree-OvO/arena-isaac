@@ -81,6 +81,15 @@ def _stub_pedestrian_visual_envelope_monitor(controller):
     return None
 
 
+def _stub_external_motion_stream(controller):
+    _log_skip(
+        controller,
+        "/isaac/pedestrian_external_motion",
+        "ARENA_ISAAC_ENABLE_CHARACTER_SERVICES is false or character backend failed to import",
+    )
+    return None
+
+
 _ENABLE_CHARACTER_SERVICES = _env_bool("ARENA_ISAAC_ENABLE_CHARACTER_SERVICES", False)
 
 if _ENABLE_CHARACTER_SERVICES:
@@ -91,6 +100,7 @@ if _ENABLE_CHARACTER_SERVICES:
         from .DeleteAllCharacters import *
         from .pedestrian_state_publisher import *
         from .pedestrian_visual_envelope import *
+        from .external_motion_stream import *
     except Exception as exc:  # noqa: BLE001 - keep the bridge alive.
         print(
             f"[people_stack] character services disabled after import failure: {exc}",
@@ -103,6 +113,7 @@ if _ENABLE_CHARACTER_SERVICES:
         start_pedestrian_visual_envelope_monitor = (
             _stub_pedestrian_visual_envelope_monitor
         )
+        start_external_motion_stream = _stub_external_motion_stream
 else:
     spawn_ped = _stub_spawn_ped
     move_ped = _stub_move_ped
@@ -111,3 +122,4 @@ else:
     start_pedestrian_visual_envelope_monitor = (
         _stub_pedestrian_visual_envelope_monitor
     )
+    start_external_motion_stream = _stub_external_motion_stream

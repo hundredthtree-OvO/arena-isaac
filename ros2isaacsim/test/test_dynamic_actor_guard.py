@@ -309,6 +309,46 @@ class TestDynamicActorGuard(unittest.TestCase):
         self.assertGreater(swept_score, 0.0)
         self.assertFalse(movement_allowed(current_score, swept_score))
 
+    def test_oriented_pedestrian_capsule_detects_shoulder_overlap(self):
+        robot = self._robot()
+        point_actor = PedestrianGuardState(
+            name="point_actor",
+            pos_xy=(0.0, 0.67),
+            next_pos_xy=(0.0, 0.67),
+            radius=0.22,
+        )
+        oriented_actor = PedestrianGuardState(
+            name="oriented_actor",
+            pos_xy=(0.0, 0.67),
+            next_pos_xy=(0.0, 0.67),
+            radius=0.22,
+            heading=-0.5 * 3.141592653589793,
+            next_heading=-0.5 * 3.141592653589793,
+            half_length=0.16,
+        )
+
+        self.assertEqual(robot_pedestrian_scores(robot, point_actor), (0.0, 0.0))
+        current_score, swept_score = robot_pedestrian_scores(robot, oriented_actor)
+        self.assertGreater(current_score, 0.0)
+        self.assertGreater(swept_score, 0.0)
+
+    def test_capsule_rotation_is_part_of_swept_guard(self):
+        robot = self._robot()
+        pedestrian = PedestrianGuardState(
+            name="turning_actor",
+            pos_xy=(0.0, 0.67),
+            next_pos_xy=(0.0, 0.67),
+            radius=0.22,
+            heading=0.0,
+            next_heading=-0.5 * 3.141592653589793,
+            half_length=0.16,
+        )
+
+        current_score, swept_score = pedestrian_robot_scores(pedestrian, robot)
+
+        self.assertEqual(current_score, 0.0)
+        self.assertGreater(swept_score, 0.0)
+
     def test_overlap_uses_translation_component_when_combined_turn_cannot_escape(self):
         robot = self._robot()
         pedestrian = self._ped(pos_xy=(0.38, 0.42))

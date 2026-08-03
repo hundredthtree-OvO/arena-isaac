@@ -312,6 +312,7 @@ from isaac_utils.services import move_ped
 from isaac_utils.services import delete_all_characters
 from isaac_utils.services import start_pedestrian_state_publisher
 from isaac_utils.services import start_pedestrian_visual_envelope_monitor
+from isaac_utils.services import start_external_motion_stream
 from isaac_utils.services import spawn_floor
 from isaac_utils.services import spawn_door
 from isaac_utils.managers.door_manager import door_manager
@@ -729,6 +730,16 @@ def export_walkable_map_service(controller):
                     3,
                     "walkable_map_origin",
                 ),
+                sample_heights_m=tuple(
+                    float(item.strip())
+                    for item in str(
+                        _get_param(
+                            "walkable_map_sample_heights",
+                            "0.15,0.45,0.75,1.05",
+                        )
+                    ).split(",")
+                    if item.strip()
+                ),
                 world_bounds=_csv_floats(
                     _get_param(
                         "walkable_map_world_bounds",
@@ -805,6 +816,10 @@ def create_controller(time=120):
         controller.declare_parameter("walkable_map_resolution", 0.05)
         controller.declare_parameter("walkable_map_origin", "-2.24,-0.90,0.75")
         controller.declare_parameter(
+            "walkable_map_sample_heights",
+            "0.15,0.45,0.75,1.05",
+        )
+        controller.declare_parameter(
             "walkable_map_world_bounds",
             "-4.60,3.60,-2.10,1.80",
         )
@@ -827,6 +842,7 @@ def create_controller(time=120):
     delete_all_characters(controller)
     start_pedestrian_state_publisher(controller)
     start_pedestrian_visual_envelope_monitor(controller)
+    start_external_motion_stream(controller)
     spawn_floor(controller)
     spawn_door(controller)
     export_collision_proxies_service(controller)

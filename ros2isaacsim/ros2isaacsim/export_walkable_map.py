@@ -50,6 +50,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--resolution", type=float, default=0.05)
     parser.add_argument("--origin", default="-2.24,-0.90,0.75")
+    parser.add_argument("--sample-heights", default="0.15,0.45,0.75,1.05")
     parser.add_argument("--bounds", default="-4.60,3.60,-2.10,1.80")
     parser.add_argument(
         "--exclude-path-keywords",
@@ -68,6 +69,7 @@ def main(argv=None) -> int:
                 "walkable_map_output_path": args.output,
                 "walkable_map_resolution": args.resolution,
                 "walkable_map_origin": args.origin,
+                "walkable_map_sample_heights": args.sample_heights,
                 "walkable_map_world_bounds": args.bounds,
                 "walkable_map_exclude_path_keywords": args.exclude_path_keywords,
             },

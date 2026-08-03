@@ -36,6 +36,8 @@ class ExternalMotionSample:
     yaw: float
     speed: float
     expired: bool
+    sequence: int | None = None
+    age_sec: float = 0.0
 
 
 class ExternalMotionState:
@@ -47,6 +49,7 @@ class ExternalMotionState:
         self._yaw = 0.0
         self._received_at = 0.0
         self._timeout_sec = 0.5
+        self._sequence: int | None = None
 
     def set_command(
         self,
@@ -56,12 +59,14 @@ class ExternalMotionState:
         yaw: float,
         received_at: float,
         timeout_sec: float,
+        sequence: int | None = None,
     ) -> None:
         parsed_position = _vector3(position, "position")
         parsed_velocity = _vector3(velocity, "velocity")
         parsed_yaw = float(yaw)
         parsed_received_at = float(received_at)
         parsed_timeout = float(timeout_sec)
+        parsed_sequence = None if sequence is None else int(sequence)
         if not all(
             math.isfinite(value)
             for value in (parsed_yaw, parsed_received_at, parsed_timeout)
@@ -75,9 +80,11 @@ class ExternalMotionState:
         self._yaw = parsed_yaw
         self._received_at = parsed_received_at
         self._timeout_sec = parsed_timeout
+        self._sequence = parsed_sequence
 
     def clear(self) -> None:
         self.enabled = False
+        self._sequence = None
 
     def sample(self, now: float) -> ExternalMotionSample | None:
         if not self.enabled:
@@ -97,6 +104,8 @@ class ExternalMotionState:
             yaw=self._yaw,
             speed=speed,
             expired=expired,
+            sequence=self._sequence,
+            age_sec=age,
         )
 
     def should_walk(self, sample: ExternalMotionSample) -> bool:
@@ -154,6 +163,8 @@ def animation_tracking_sample(
             yaw=float(reference.yaw),
             speed=0.0,
             expired=True,
+            sequence=reference.sequence,
+            age_sec=reference.age_sec,
         )
 
     gain = max(0.0, float(tracking_gain))
@@ -179,6 +190,8 @@ def animation_tracking_sample(
         yaw=yaw,
         speed=speed,
         expired=False,
+        sequence=reference.sequence,
+        age_sec=reference.age_sec,
     )
 
 
@@ -230,6 +243,8 @@ def turn_aware_animation_sample(
         yaw=target_yaw,
         speed=sample.speed * scale,
         expired=False,
+        sequence=sample.sequence,
+        age_sec=sample.age_sec,
     )
 
 

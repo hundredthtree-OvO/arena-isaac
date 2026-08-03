@@ -230,6 +230,12 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         ("hard_guard_release_hold_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC"),
         ("hard_guard_escape_horizon_sec", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC"),
         ("hard_guard_overlap_deadband_m", "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M"),
+        ("hard_body_radius_m", "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_RADIUS_M"),
+        ("hard_body_half_length_m", "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_HALF_LENGTH_M"),
+        (
+            "hard_body_axis_sample_spacing_m",
+            "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_AXIS_SAMPLE_SPACING_M",
+        ),
     ):
         if pedestrians.get(key) is not None:
             env[env_name] = str(pedestrians.get(key))

@@ -100,6 +100,29 @@ class TestExternalMotionState(unittest.TestCase):
         self.assertTrue(sample.expired)
         self.assertFalse(state.should_walk(sample))
 
+    def test_sample_exposes_sequence_and_age_through_tracking(self):
+        state = ExternalMotionState()
+        state.set_command(
+            position=[1.0, 2.0, 0.0],
+            velocity=[0.5, -0.25, 0.0],
+            yaw=0.4,
+            received_at=10.0,
+            timeout_sec=0.5,
+            sequence=17,
+        )
+
+        sample = state.sample(10.2)
+        tracked = animation_tracking_sample(
+            sample,
+            current_position=(0.8, 1.9, 0.0),
+        )
+
+        self.assertEqual(sample.sequence, 17)
+        self.assertAlmostEqual(sample.age_sec, 0.2)
+        self.assertEqual(tracked.sequence, 17)
+        self.assertAlmostEqual(tracked.age_sec, 0.2)
+        self.assertFalse(tracked.expired)
+
     def test_clear_releases_external_authority(self):
         state = ExternalMotionState()
         state.set_command(
