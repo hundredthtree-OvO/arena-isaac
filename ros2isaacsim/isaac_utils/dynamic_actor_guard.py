@@ -153,6 +153,20 @@ def pedestrian_robot_scores(ped: PedestrianGuardState, robot: RobotGuardState) -
     return current_score, next_score
 
 
+def current_pedestrian_contacts(
+    robot: RobotGuardState,
+    pedestrians: Sequence[PedestrianGuardState],
+) -> dict[str, float]:
+    """Return only current zero-margin overlaps, without predicting or clipping."""
+
+    contacts: dict[str, float] = {}
+    for pedestrian in pedestrians:
+        current_score, _ = robot_pedestrian_scores(robot, pedestrian)
+        if current_score > 0.0:
+            contacts[str(pedestrian.name)] = float(current_score)
+    return contacts
+
+
 def _swept_pair_penetration(
     robot: RobotGuardState,
     pedestrian: PedestrianGuardState,

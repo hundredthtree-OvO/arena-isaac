@@ -98,9 +98,10 @@ def pedestrian_spawn(request, response):
     timeline = omni.timeline.get_timeline_interface()
     spawned_count = 0
     new_people = []
-
     for person_msg in request.people:
-        stage_name = normalize_stage_name(getattr(person_msg, "stage_prefix", None), default="Character")
+        stage_name = normalize_stage_name(
+            getattr(person_msg, "stage_prefix", None), default="Character"
+        )
         existing = _find_existing_person(manager, stage_name)
         if existing is None:
             new_people.append((person_msg, stage_name))
@@ -122,13 +123,13 @@ def pedestrian_spawn(request, response):
         _register_person_aliases(manager, stage_name, existing)
         spawned_count += 1
         _log_info(
-            f"Reactivated pooled pedestrian {stage_name}: root={getattr(existing, '_stage_prefix', None)}, "
-            f"pose={init_pos}"
+            f"Reactivated pooled pedestrian {stage_name}: "
+            f"root={getattr(existing, '_stage_prefix', None)}, pose={init_pos}, yaw={init_yaw:.3f}"
         )
 
-    # AnimGraph's variable synchronization ignores stage changes during play.
-    # Pause the batch setup transaction without resetting simulation time, then
-    # restore the caller's previous timeline state.
+    # Creating a brand-new People character still requires a paused timeline.
+    # Reusing a pooled character must not pause it: pause/play invalidates every
+    # PhysX tensor view in the stage, including the robot articulation.
     was_playing = bool(timeline.is_playing())
     if new_people and was_playing:
         timeline.pause()

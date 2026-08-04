@@ -75,6 +75,7 @@ except Exception:  # pragma: no cover - imported inside Isaac Sim normally
 try:
     from isaac_utils.dynamic_actor_guard import (
         RobotGuardState,
+        current_pedestrian_contacts,
         footprint_extents,
         predict_robot_pose,
         scale_robot_command_for_pedestrians,
@@ -82,6 +83,7 @@ try:
 except Exception:  # pragma: no cover
     from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
         RobotGuardState,
+        current_pedestrian_contacts,
         footprint_extents,
         predict_robot_pose,
         scale_robot_command_for_pedestrians,
@@ -653,6 +655,7 @@ class MecanumRobot:
         self._odom_pub = None
         self._applied_pub = None
         self._hard_guard_event_pub = None
+        self._pedestrian_contact_pub = None
         self._reset_status_pub = None
         self._tf_pub = None
         self._static_tf_pub = None
@@ -673,6 +676,11 @@ class MecanumRobot:
                 self._hard_guard_event_pub = self.node.create_publisher(
                     String,
                     "/isaac/pedestrian_hard_guard_events",
+                    10,
+                )
+                self._pedestrian_contact_pub = self.node.create_publisher(
+                    String,
+                    "/isaac/pedestrian_contact_events",
                     10,
                 )
                 self._reset_status_pub = self.node.create_publisher(
@@ -724,6 +732,7 @@ class MecanumRobot:
         )
         self._last_pedestrian_hard_guard_log = 0.0
         self._last_pedestrian_hard_guard_event = 0.0
+        self._active_pedestrian_contacts: set[str] = set()
         self._articulation = None
         self._diff_base_link_index: Optional[int] = None
         self._last_diff_force_view_attempt = 0.0
@@ -977,6 +986,12 @@ class MecanumRobot:
         self._heading = 0.0
         self._diff_contact_samples = []
         self._last_diff_contact_sample_t = 0.0
+        if self.config.mode == "physx_diff_contact":
+            if not self._restore_physx_diff_after_episode_reset():
+                message = "episode reset could not restore PhysX differential drive state"
+                self._log_warn(f"[{self.name}] {message}")
+                self._publish_reset_status(generation, "failed", message)
+                return True
         self._episode_reset_generation = int(generation)
         self._restart_settling_state(
             warmup_sec=self.config.spawn_settling_sec,
@@ -988,6 +1003,66 @@ class MecanumRobot:
             f"position={position.tolist()}, yaw={_quat_wxyz_to_yaw(orientation):.3f}; entering settling"
         )
         self._publish_reset_status(generation, "applied", "pose and zero velocity written; settling started")
+        return True
+
+    def _restore_physx_diff_after_episode_reset(self) -> bool:
+        """Rebind and wake PhysX state invalidated by an episode teleport."""
+        if self._articulation is None:
+            return False
+
+        # A pose teleport can leave a valid-looking tensor view attached to a
+        # sleeping or stale articulation.  Never reuse the cached link index
+        # across reset generations.
+        self._diff_base_link_index = None
+        self._last_diff_force_view_attempt = 0.0
+        self._warned_diff_force_view = False
+        try:
+            handle_valid = bool(self._articulation.is_physics_handle_valid())
+        except Exception:
+            handle_valid = False
+        if not handle_valid and not self._recreate_articulation_wrapper():
+            return False
+
+        try:
+            if hasattr(self._articulation, "wake_up"):
+                self._articulation.wake_up()
+        except Exception as exc:
+            self._log_warn(f"[{self.name}] PhysX reset articulation wake-up failed: {exc}")
+            return False
+
+        drives_ready = self._configure_physx_diff_wheel_drives()
+        force_view_ready = (
+            not self.config.separated_tire_force_enabled
+            or self._ensure_diff_articulation_force_view(force=True)
+        )
+        self._diff_contact_samples = []
+        self._last_diff_contact_sample_t = 0.0
+        self._log_info(
+            f"[{self.name}] PhysX differential reset recovery: "
+            f"drives_ready={drives_ready}, force_view_ready={force_view_ready}, "
+            "articulation_woken=True"
+        )
+        return bool(drives_ready and force_view_ready)
+
+    def _recreate_articulation_wrapper(self) -> bool:
+        """Replace tensor-backed wrappers after a timeline lifecycle invalidation."""
+        self._log_warn(
+            f"[{self.name}] articulation physics handle is stale; rebuilding the robot wrapper"
+        )
+        self._initialized = False
+        self._articulation = None
+        self._joint_indices = None
+        self._arm_joint_indices = None
+        self._gripper_joint_indices = None
+        self._roller_joint_indices = None
+        self._diff_base_link_index = None
+        self._last_diff_force_view_attempt = 0.0
+        self._diff_contact_samples = []
+        self._last_diff_contact_sample_t = 0.0
+        if not self._ensure_initialized():
+            self._log_warn(f"[{self.name}] failed to rebuild the robot articulation wrapper")
+            return False
+        self._log_info(f"[{self.name}] robot articulation wrapper rebuilt successfully")
         return True
 
     def _log_info(self, text: str):
@@ -1525,6 +1600,38 @@ class MecanumRobot:
                 )
         return result.vx, result.vy, result.wz
 
+    def set_pedestrian_hard_guard_enabled(self, enabled: bool) -> tuple[bool, str]:
+        self._pedestrian_hard_guard_enabled = bool(enabled)
+        state = "enabled" if self._pedestrian_hard_guard_enabled else "detect_only"
+        self._last_guard_mode = f"pedestrian_guard_{state}"
+        return True, f"pedestrian hard guard is {state}"
+
+    def _publish_pedestrian_contacts(self) -> None:
+        if self._pedestrian_contact_pub is None:
+            return
+        robot_state = self.get_dynamic_guard_state(0.0)
+        if robot_state is None:
+            return
+        contacts = current_pedestrian_contacts(
+            robot_state,
+            self._active_pedestrian_guard_states(0.0),
+        )
+        current_contacts = set(contacts)
+        for pedestrian_name, penetration in contacts.items():
+            if pedestrian_name in self._active_pedestrian_contacts:
+                continue
+            event = {
+                "event": "pedestrian_robot_contact",
+                "robot": self.name,
+                "pedestrian": pedestrian_name,
+                "penetration_m": float(penetration),
+                "geometry_source": "zero_margin_runtime_envelope",
+                "hard_guard_enabled": bool(self._pedestrian_hard_guard_enabled),
+                "sim_time_sec": float(self._last_clock_time_float),
+            }
+            self._pedestrian_contact_pub.publish(String(data=json.dumps(event, sort_keys=True)))
+        self._active_pedestrian_contacts = current_contacts
+
     def _selected_cmd(self):
         with self._lock:
             if self._episode_control_hold:
@@ -1690,9 +1797,20 @@ class MecanumRobot:
         if not self.config.separated_tire_force_enabled:
             return False
         try:
+            handle_valid = bool(
+                self._articulation is not None
+                and self._articulation.is_physics_handle_valid()
+            )
+        except Exception:
+            handle_valid = False
+        if not handle_valid and self._initialized:
+            if not self._recreate_articulation_wrapper():
+                return False
+        try:
             physics_view = getattr(self._articulation, "_physics_view", None)
             if (
-                self._diff_base_link_index is not None
+                not force
+                and self._diff_base_link_index is not None
                 and self._articulation is not None
                 and self._articulation.is_physics_handle_valid()
                 and physics_view is not None
@@ -2593,6 +2711,7 @@ class MecanumRobot:
         if drive_mode == DIFFERENTIAL_DRIVE:
             vy = 0.0
             self._smooth_vy = 0.0
+        self._publish_pedestrian_contacts()
         vx, vy, wz = self._apply_pedestrian_hard_guard(vx, vy, wz)
         if self._pedestrian_hard_guard_enabled:
             self._smooth_vx = float(vx)
@@ -2624,6 +2743,8 @@ class MecanumTeleopManager:
         self.subscriptions = []
         self._reset_service = None
         self._control_hold_service = None
+        self._pedestrian_hard_guard_service = None
+        self.pedestrian_hard_guard_enabled: bool | None = None
 
     def register_node(self, node):
         self.node = node
@@ -2639,6 +2760,28 @@ class MecanumTeleopManager:
                 "/isaac/set_mecanum_control_hold",
                 self._control_hold_callback,
             )
+        if self._pedestrian_hard_guard_service is None:
+            self._pedestrian_hard_guard_service = node.create_service(
+                SetBool,
+                "/isaac/set_pedestrian_hard_guard",
+                self._pedestrian_hard_guard_callback,
+            )
+
+    def _pedestrian_hard_guard_callback(self, request, response):
+        if len(self.robots) != 1:
+            response.success = False
+            response.message = (
+                "pedestrian hard guard control requires exactly one registered robot; "
+                f"found {len(self.robots)}"
+            )
+            return response
+        robot = next(iter(self.robots.values()))
+        success, message = robot.set_pedestrian_hard_guard_enabled(bool(request.data))
+        if success:
+            self.pedestrian_hard_guard_enabled = bool(request.data)
+        response.success = bool(success)
+        response.message = str(message)
+        return response
 
     def _control_hold_callback(self, request, response):
         if len(self.robots) != 1:

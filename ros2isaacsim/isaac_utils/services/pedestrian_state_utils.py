@@ -47,6 +47,8 @@ def pedestrian_state_tagnames() -> tuple[str, ...]:
         "guard_block_reason",
         "yaw_rad",
         "yaw_valid",
+        "embodiment_generation",
+        "reactivation_ready",
     )
 
 
@@ -119,4 +121,6 @@ def pedestrian_state_tags(person) -> list[str]:
         str(guard_block_reason),
         "nan" if yaw is None else f"{yaw:.9f}",
         "false" if yaw is None else "true",
+        str(getattr(person, "embodiment_generation", 0)),
+        "true" if bool(getattr(person, "reactivation_ready", False)) else "false",
     ]

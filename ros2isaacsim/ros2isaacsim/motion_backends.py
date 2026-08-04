@@ -74,6 +74,11 @@ class PhysxDiffContactBackend(MotionBackend):
         del vy, dt, drive_mode
         if robot._articulation is None or robot._joint_indices is None:
             return
+        # Pausing the timeline to rebuild a pooled pedestrian's AnimGraph can
+        # invalidate every PhysX tensor view, including the robot articulation.
+        # Recover it before wheel targets are sent; otherwise target writes and
+        # tire-force feedback silently remain unavailable for the whole episode.
+        robot._ensure_diff_articulation_force_view()
         robot._publish_actual_odom_tf()
         robot._applied_vx = float(vx)
         robot._applied_vy = 0.0

@@ -4,10 +4,54 @@ import unittest
 import numpy as np
 
 from ros2isaacsim.actual_motion_state import ActualMotionStateEstimator
-from ros2isaacsim.motion_backends import motion_backend_for_mode
+from ros2isaacsim.motion_backends import PhysxDiffContactBackend, motion_backend_for_mode
 
 
 class TestMotionBackendBoundaries(unittest.TestCase):
+    def test_contact_backend_recovers_articulation_before_wheel_commands(self):
+        calls = []
+
+        class Drive:
+            last_effective_wz = 0.0
+
+            def apply(self, vx, wz):
+                calls.append("wheel_targets")
+                return np.zeros(4, dtype=np.float32)
+
+        class Config:
+            separated_tire_force_enabled = True
+
+        class Robot:
+            _articulation = object()
+            _joint_indices = [0, 1, 2, 3]
+            _physx_diff_drive = Drive()
+            config = Config()
+
+            def _ensure_diff_articulation_force_view(self):
+                calls.append("recover_view")
+                return True
+
+            def _publish_actual_odom_tf(self):
+                pass
+
+            def _publish_applied_cmd_vel(self):
+                pass
+
+            def _read_joint_velocities(self, _indices):
+                return np.zeros(4, dtype=np.float32)
+
+            def _current_physx_diff_contacts(self):
+                return []
+
+            def _apply_separated_tire_forces(self, _actual, _contacts):
+                return None
+
+        backend = PhysxDiffContactBackend()
+        backend._log_diagnostics = lambda *args: None
+        backend.apply(Robot(), 0.2, 0.0, 0.1, 0.02, "differential")
+
+        self.assertEqual(calls[:2], ["recover_view", "wheel_targets"])
+
     def test_modes_own_distinct_guard_and_odom_policies(self):
         wheels = motion_backend_for_mode("physx_wheels")
         contact = motion_backend_for_mode("physx_diff_contact")

@@ -39,6 +39,8 @@ class _DummyPerson:
         guard_block_reason="",
         active=True,
         parked=False,
+        embodiment_generation=0,
+        reactivation_ready=False,
         orientation=(0.0, 0.0, 0.0, 1.0),
     ):
         self._requested_stage_name = requested
@@ -53,6 +55,8 @@ class _DummyPerson:
         self._guard_block_reason = guard_block_reason
         self._active = active
         self.is_parked = parked
+        self.embodiment_generation = embodiment_generation
+        self.reactivation_ready = reactivation_ready
         self._state = type("_State", (), {"orientation": orientation})()
 
 
@@ -103,6 +107,8 @@ class TestPedestrianStateUtils(unittest.TestCase):
             guard_block_generation=7,
             guard_block_count=3,
             guard_block_reason="robot",
+            embodiment_generation=4,
+            reactivation_ready=True,
         )
         self.assertEqual(
             pedestrian_state_tagnames(),
@@ -118,6 +124,8 @@ class TestPedestrianStateUtils(unittest.TestCase):
                 "guard_block_reason",
                 "yaw_rad",
                 "yaw_valid",
+                "embodiment_generation",
+                "reactivation_ready",
             ),
         )
         self.assertEqual(
@@ -133,6 +141,8 @@ class TestPedestrianStateUtils(unittest.TestCase):
                 "3",
                 "robot",
                 "0.000000000",
+                "true",
+                "4",
                 "true",
             ],
         )

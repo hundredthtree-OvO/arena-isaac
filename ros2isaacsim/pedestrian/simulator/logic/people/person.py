@@ -256,6 +256,10 @@ class Person:
         self._motion_command_generation = 0
         self._dispatched_command_generation = 0
         self._motion_state = "idle"
+        self._reactivation_pose = None
+        self._reactivation_yaw = 0.0
+        self._reactivation_stabilization_frames = 0
+        self._embodiment_generation = 1
         self._external_motion = ExternalMotionState(
             walk_speed_threshold=max(
                 0.0,
@@ -600,7 +604,10 @@ class Person:
 
         def _update_path_with_voxel_safety(*args, **kwargs):
             try:
-                if self._robot_interaction_policy == "stop":
+                if (
+                    self._robot_interaction_policy == "stop"
+                    and self._runtime_robot_interaction_enabled()
+                ):
                     if self._behavior_robot_yield_required(navigation_manager):
                         self._pause_behavior_path_for_robot(navigation_manager)
                         return
@@ -930,6 +937,84 @@ class Person:
         )
         return True
 
+    def _discard_official_people_command(self, agent) -> None:
+        """Synchronously detach an interrupted command from the People script."""
+        if agent is None:
+            return
+        current_command = getattr(agent, "current_command", None)
+        if current_command is not None:
+            try:
+                current_command.force_quit_command()
+            except Exception:
+                pass
+            try:
+                current_command.exit_command()
+            except Exception:
+                pass
+        agent.current_command = None
+        agent.commands = []
+
+    def _reset_people_runtime_for_reactivation(self) -> None:
+        """Clear one pooled actor without rebuilding global AnimGraph runtime."""
+        _, agent = self._behavior_agent()
+        if agent is not None:
+            self._discard_official_people_command(agent)
+        self._anim_motion_state = None
+        self._external_motion.clear()
+
+    def _reset_behavior_runtime_at_pose(self, position, yaw: float) -> None:
+        """Clear public People trajectory state while retaining its runtime."""
+        pos = np.array(position, dtype=float).reshape(3)
+        self._anim_motion_state = None
+        self._set_idle_animation()
+
+        _, agent = self._behavior_agent()
+        if agent is None:
+            return
+        navigation_manager = getattr(agent, "navigation_manager", None)
+        if navigation_manager is not None:
+            navigation_manager.set_path_points([])
+            navigation_manager.clean_path_targets()
+            navigation_manager.collision_list = []
+            navigation_manager.positions_over_time = []
+            navigation_manager.delta_time_list = []
+            navigation_manager.velocity_vec = carb.Float3(0.0, 0.0, 0.0)
+            character_name = getattr(navigation_manager, "character_name", None)
+            character_manager = getattr(navigation_manager, "character_manager", None)
+            if character_name and character_manager is not None:
+                current = carb.Float3(float(pos[0]), float(pos[1]), float(pos[2]))
+                character_manager.set_character_current_pos(character_name, current)
+                character_manager.set_character_future_pos(character_name, current)
+                character_manager.set_character_radius(character_name, 0.5)
+        agent.commands = []
+        character = getattr(agent, "character", None)
+        if character is not None:
+            character.set_variable("Action", "None")
+            character.set_variable("Walk", 0.0)
+
+    def _hold_reactivation_runtime_pose(self) -> None:
+        """Seed only the fresh AnimGraph root; the parent USD pose is already set."""
+        if self.character_graph is None or self._reactivation_pose is None:
+            return
+        pos = np.array(self._reactivation_pose, dtype=float).reshape(3)
+        orientation = Rotation.from_euler(
+            "z", self._reactivation_yaw, degrees=False
+        ).as_quat()
+        self.character_graph.set_world_transform(
+            carb.Float3(float(pos[0]), float(pos[1]), float(pos[2])),
+            carb.Float4(
+                float(orientation[0]),
+                float(orientation[1]),
+                float(orientation[2]),
+                float(orientation[3]),
+            ),
+        )
+        self._state.position = pos
+        self._state.orientation = orientation
+        self._pose_valid = True
+        self._last_valid_pose_time = time.monotonic()
+        self._update_collision_proxy()
+
     def update(self, dt: float):
         """
         Method that implements the logic to make the person move around in the simulation world and also play the animation
@@ -942,6 +1027,22 @@ class Person:
             return
 
         if not self._ensure_animation_graph_ready():
+            return
+
+        if self._reactivation_stabilization_frames > 0:
+            # The first AnimGraph evaluations after timeline resume can restore
+            # the previous locomotion root. Reassert the activation transform
+            # before allowing a cached movement generation to dispatch.
+            self._anim_motion_state = None
+            self._set_idle_animation()
+            self._hold_reactivation_runtime_pose()
+            self._reset_behavior_runtime_at_pose(
+                self._reactivation_pose,
+                self._reactivation_yaw,
+            )
+            self._reactivation_stabilization_frames -= 1
+            if self._reactivation_stabilization_frames == 0:
+                self._reactivation_pose = None
             return
 
         self._last_update_dt = max(0.0, float(dt))
@@ -977,7 +1078,10 @@ class Person:
                 self._set_idle_animation()
             return
         if self._behavior_script_enabled:
-            if self._robot_interaction_policy == "avoid":
+            if (
+                self._robot_interaction_policy == "avoid"
+                and self._runtime_robot_interaction_enabled()
+            ):
                 self._publish_robot_obstacles_to_people(dt)
             self._dispatch_behavior_commands_if_ready()
             return
@@ -1116,13 +1220,47 @@ class Person:
                 self._warn_pose_read_throttled(
                     f"Failed to stop People command for {agent_name}: {exc}"
                 )
-        else:
-            self._set_idle_animation()
+        self._set_idle_animation()
         self._motion_state = "idle"
 
     @property
     def is_parked(self) -> bool:
         return bool(self._parked)
+
+    @property
+    def embodiment_generation(self) -> int:
+        return int(self._embodiment_generation)
+
+    @property
+    def reactivation_ready(self) -> bool:
+        return bool(
+            self._active
+            and not self._parked
+            and self._anim_graph_ready
+            and self._pose_valid
+            and self._reactivation_stabilization_frames == 0
+        )
+
+    @property
+    def is_pool_ready(self) -> bool:
+        """Return true after Isaac People has consumed the interrupted command."""
+        if not self._parked:
+            return False
+        _, agent = self._behavior_agent()
+        if agent is None:
+            return True
+        navigation_manager = getattr(agent, "navigation_manager", None)
+        return (
+            getattr(agent, "current_command", None) is None
+            and not getattr(agent, "commands", [])
+            and (
+                navigation_manager is None
+                or (
+                    not getattr(navigation_manager, "path_points", [])
+                    and not getattr(navigation_manager, "path_targets", [])
+                )
+            )
+        )
 
     def _set_collision_proxy_enabled(self, enabled: bool) -> None:
         if not self._collision_proxy_path:
@@ -1141,7 +1279,18 @@ class Person:
         """Hide an idle character without invalidating AnimGraph handles."""
         if not self._active:
             raise RuntimeError(f"Cannot park disposed pedestrian {self._stage_prefix}")
-        self.set_direct_pose(position, stop=True)
+        if self._parked:
+            return
+        self.stop_motion()
+        _, agent = self._behavior_agent()
+        self._discard_official_people_command(agent)
+        navigation_manager = getattr(agent, "navigation_manager", None) if agent is not None else None
+        if navigation_manager is not None:
+            navigation_manager.set_path_points([])
+            navigation_manager.clean_path_targets()
+            navigation_manager.positions_over_time = []
+            navigation_manager.delta_time_list = []
+        self.set_direct_pose(position, stop=False)
         self._set_collision_proxy_enabled(False)
         try:
             if self.prim is not None and self.prim.IsValid():
@@ -1150,12 +1299,25 @@ class Person:
             pass
         self._parked = True
         self._pose_valid = False
+        self._reactivation_pose = None
+        self._reactivation_stabilization_frames = 0
 
     def reactivate(self, position, yaw: float = 0.0) -> None:
         """Reset and show a parked character while preserving its graph bindings."""
         if not self._active:
             raise RuntimeError(f"Cannot reactivate disposed pedestrian {self._stage_prefix}")
-        self.set_direct_pose(position, yaw=float(yaw), stop=True)
+        if self._parked and not self.is_pool_ready:
+            raise RuntimeError(
+                f"Cannot reactivate {self._stage_prefix} before its previous People command drains"
+            )
+        self.stop_motion()
+        self._reset_people_runtime_for_reactivation()
+        self._embodiment_generation += 1
+        self.set_direct_pose(position, yaw=float(yaw), stop=False)
+        self._reactivation_pose = np.array(position, dtype=float).reshape(3)
+        self._reactivation_yaw = float(yaw)
+        self._reactivation_stabilization_frames = 4
+        self._anim_motion_state = None
         self._guard_blocked = False
         self._guard_block_count = 0
         self._guard_block_reason = ""
@@ -1805,7 +1967,10 @@ class Person:
             self._controller.update_state(self._state)
 
     def _candidate_robot_pose_blocker(self, candidate_position) -> str | None:
-        if self._robot_interaction_policy != "stop":
+        if (
+            self._robot_interaction_policy != "stop"
+            or not self._runtime_robot_interaction_enabled()
+        ):
             return None
         try:
             from isaac_utils.mecanum_teleop import mecanum_teleop_manager
@@ -1950,6 +2115,10 @@ class Person:
         )
 
     def _robot_guard_allows_motion(self, dt: float, active_goal) -> bool:
+        if not self._runtime_robot_interaction_enabled():
+            self._robot_guard_latched = False
+            self._robot_guard_clear_since = 0.0
+            return True
         if dt <= 0.0 or self._target_speed <= 0.0:
             return True
         try:
@@ -1992,6 +2161,15 @@ class Person:
                 f"[dynamic_actor_guard] pedestrian {self._stage_prefix} paused for robot {blocked_by}"
             )
         return False
+
+    @staticmethod
+    def _runtime_robot_interaction_enabled() -> bool:
+        try:
+            from isaac_utils.mecanum_teleop import mecanum_teleop_manager
+        except Exception:
+            return True
+        enabled = getattr(mecanum_teleop_manager, "pedestrian_hard_guard_enabled", None)
+        return True if enabled is None else bool(enabled)
 
     def _robot_guard_blocker(
         self,

@@ -30,16 +30,21 @@ def _park_people_for_root(root_path: str):
     for person in matched_people:
         park = getattr(person, "park", None)
         if not callable(park):
-            return False
+            return True, False
         try:
             park(parking_pose)
         except Exception as exc:
             carb.log_error(f"Failed to park pedestrian {root_path}: {exc}")
-            return False
+            return True, False
     if matched_people:
         door_manager.remove_pedestrian(root_path)
-        carb.log_info(f"Parked pedestrian root={root_path}, pose={parking_pose}")
-    return bool(matched_people)
+        ready = all(bool(getattr(person, "is_pool_ready", False)) for person in matched_people)
+        if ready:
+            carb.log_info(f"Pedestrian pool ready root={root_path}, pose={parking_pose}")
+        else:
+            carb.log_info(f"Pedestrian park pending command drain root={root_path}")
+        return True, ready
+    return False, False
 
 
 def _people_for_root(root_path: str, people: dict):
@@ -69,8 +74,15 @@ def prim_deleter(request, response):
     if prim_path == Paths.scene.pedestrian():
         door_manager.reset()
 
-    if prim_path.startswith("/World/Characters/") and _park_people_for_root(prim_path):
-        carb.log_info(f"Pooled pedestrian without destroying its AnimGraph: {prim_path}")
+    matched_people = False
+    pool_ready = False
+    if prim_path.startswith("/World/Characters/"):
+        matched_people, pool_ready = _park_people_for_root(prim_path)
+    if matched_people:
+        if pool_ready:
+            carb.log_info(f"Pooled pedestrian without destroying its AnimGraph: {prim_path}")
+        response.ret = bool(pool_ready)
+        return response
     else:
         commands.execute(
             "IsaacSimDestroyPrim",

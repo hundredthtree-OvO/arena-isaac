@@ -5,18 +5,20 @@ try:
         PedestrianGuardState,
         RobotGuardState,
         circle_intersects_grid_cells,
+        current_pedestrian_contacts,
         movement_allowed,
         pedestrian_robot_scores,
         predict_pedestrian_step,
         predict_robot_pose,
         robot_pedestrian_scores,
         scale_robot_command_for_pedestrians,
-    )
+)
 except ImportError:
     from ros2isaacsim.isaac_utils.dynamic_actor_guard import (
         PedestrianGuardState,
         RobotGuardState,
         circle_intersects_grid_cells,
+        current_pedestrian_contacts,
         movement_allowed,
         pedestrian_robot_scores,
         predict_pedestrian_step,
@@ -27,6 +29,36 @@ except ImportError:
 
 
 class TestDynamicActorGuard(unittest.TestCase):
+    def test_current_contacts_do_not_predict_or_add_safety_margin(self):
+        robot = RobotGuardState(
+            name="robot",
+            pos_xy=(0.0, 0.0),
+            heading=0.0,
+            next_pos_xy=(0.0, 0.0),
+            next_heading=0.0,
+            forward=0.30,
+            rear=0.30,
+            left=0.25,
+            right=0.25,
+        )
+        touching = PedestrianGuardState(
+            name="touching",
+            pos_xy=(0.50, 0.0),
+            next_pos_xy=(0.50, 0.0),
+            radius=0.25,
+        )
+        nearby = PedestrianGuardState(
+            name="nearby",
+            pos_xy=(0.56, 0.0),
+            next_pos_xy=(0.20, 0.0),
+            radius=0.25,
+        )
+
+        contacts = current_pedestrian_contacts(robot, (touching, nearby))
+
+        self.assertIn("touching", contacts)
+        self.assertNotIn("nearby", contacts)
+
     @staticmethod
     def _robot(pos_xy=(0.0, 0.0)):
         return RobotGuardState(
@@ -372,3 +404,4 @@ class TestDynamicActorGuard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+    current_pedestrian_contacts,
