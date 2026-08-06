@@ -26,10 +26,7 @@ except Exception:  # pragma: no cover
         pedestrian_robot_scores,
         predict_pedestrian_step,
     )
-try:
-    from isaac_utils.voxel_guard import VoxelCollisionGuard, VoxelGuardConfig
-except Exception:  # pragma: no cover
-    from ros2isaacsim.isaac_utils.voxel_guard import VoxelCollisionGuard, VoxelGuardConfig
+from pedestrian.simulator.logic.people.walkable_guard import StaticWalkableGuard
 from isaac_utils.utils.assets import get_assets_root_path_safe
 from isaac_utils.animgraph_people import normalize_stage_name
 from omni.anim.people.scripts.utils import Utils
@@ -124,7 +121,7 @@ class Person:
     collision_proxy_center_z = 0.90
     anim_graph_variable_prefix = "anim:graph:variable:"
     required_anim_graph_variables = ("Action", "Walk", "PathPoints")
-    _shared_static_voxel_guard = None
+    _shared_static_walkable_guard = None
 
     if people_asset_folder:
         assets_root_path = people_asset_folder
@@ -331,7 +328,7 @@ class Person:
         self._pose_valid = False
         self._last_valid_pose_time = 0.0
         self._last_static_guard_warn = 0.0
-        self._static_voxel_guard = self._get_static_voxel_guard()
+        self._static_walkable_guard = self._get_static_walkable_guard()
 
         # Set the controller for the person if any and initialize it
         self._controller = controller
@@ -618,7 +615,7 @@ class Person:
                 if bool(getattr(navigation_manager, "navmesh_enabled", False)):
                     self._set_guard_block_state(False)
                     return original_update_path(*args, **kwargs)
-                return self._update_navmesh_disabled_path_with_static_voxel_safety(navigation_manager)
+                return self._update_navmesh_disabled_path_with_static_safety(navigation_manager)
             except Exception as exc:  # pragma: no cover - vendor fallback
                 self._set_guard_block_state(False)
                 self._warn_pose_read_throttled(
@@ -689,7 +686,7 @@ class Person:
         self._guard_block_reason = ""
 
     def _static_pose_check(self, position) -> tuple[bool, str | None]:
-        guard = self._static_voxel_guard
+        guard = self._static_walkable_guard
         if guard is None:
             return True, None
         try:
@@ -709,11 +706,11 @@ class Person:
                 origin_xy=(origin_x, origin_y),
                 occupied=guard.occupied_xy,
             )
-            return (hit is None, None if hit is None else f"voxel:{hit[0]},{hit[1]}")
+            return (hit is None, None if hit is None else f"walkable:{hit[0]},{hit[1]}")
         except Exception:
             return True, None
 
-    def _update_navmesh_disabled_path_with_static_voxel_safety(self, navigation_manager) -> None:
+    def _update_navmesh_disabled_path_with_static_safety(self, navigation_manager) -> None:
         navigation_manager.update_target_path_progress()
         if navigation_manager.destination_reached() or not navigation_manager.dynamic_avoidance_enabled:
             self._set_guard_block_state(False)
@@ -797,7 +794,7 @@ class Person:
         start_xy = (float(current_pos[0]), float(current_pos[1]))
 
         def _segment_clear(candidate_point) -> tuple[bool, str | None]:
-            sample_step = max(0.5 * float(getattr(self._static_voxel_guard, "resolution", 0.05)), 0.01)
+            sample_step = max(0.5 * float(getattr(self._static_walkable_guard, "resolution", 0.05)), 0.01)
 
             def _point_safe(point_xy: tuple[float, float]) -> bool:
                 safe, _ = self._static_pose_check((float(point_xy[0]), float(point_xy[1]), float(current_pos[2])))
@@ -829,13 +826,13 @@ class Person:
             ),
         )
         if selected is None:
-            self._set_guard_block_state(True, reason="static_voxel")
+            self._set_guard_block_state(True, reason="static_walkable")
             if float(time.monotonic()) - float(self._last_navigation_voxel_wait_log) >= 0.5:
                 self._last_navigation_voxel_wait_log = float(time.monotonic())
                 blocked_obstacle = left_obstacle if not left_safe else right_obstacle if not right_safe else None
                 carb.log_warn(
                     f"Waiting for safe lateral avoidance for {self._stage_prefix}; "
-                    f"static obstacle={blocked_obstacle or 'voxel'}"
+                    f"static obstacle={blocked_obstacle or 'walkable_map'}"
                 )
             return
 
@@ -1825,33 +1822,18 @@ class Person:
         return position, orientation
 
     @classmethod
-    def _get_static_voxel_guard(cls):
-        if cls._shared_static_voxel_guard is not None:
-            return cls._shared_static_voxel_guard
-        map_path = os.environ.get("ARENA_ISAAC_VOXEL_MAP_PATH", "").strip()
+    def _get_static_walkable_guard(cls):
+        if cls._shared_static_walkable_guard is not None:
+            return cls._shared_static_walkable_guard
+        map_path = os.environ.get("ARENA_ISAAC_PEDESTRIAN_WALKABLE_MAP_PATH", "").strip()
         if not map_path:
             return None
         try:
-            diameter = 2.0 * float(cls.collision_proxy_radius)
-            cls._shared_static_voxel_guard = VoxelCollisionGuard(
-                robot_name="pedestrian_static_guard",
-                config=VoxelGuardConfig(
-                    enabled=True,
-                    map_path=map_path,
-                    length=diameter,
-                    width=diameter,
-                    margin=0.0,
-                    z_min=0.05,
-                    z_max=1.2,
-                    refresh_sec=1.0,
-                    log_sec=0.0,
-                    block_log_sec=2.0,
-                ),
-            )
+            cls._shared_static_walkable_guard = StaticWalkableGuard(map_path)
         except Exception as exc:
-            carb.log_warn(f"Pedestrian static voxel guard is unavailable: {exc}")
-            cls._shared_static_voxel_guard = None
-        return cls._shared_static_voxel_guard
+            carb.log_warn(f"Pedestrian walkable-map guard is unavailable: {exc}")
+            cls._shared_static_walkable_guard = None
+        return cls._shared_static_walkable_guard
 
     def _static_pose_collides(self, position, orientation) -> tuple[bool, str | None]:
         safe, obstacle = self._static_pose_check(position)
@@ -1945,7 +1927,7 @@ class Person:
 
         collides, obstacle = self._static_pose_collides(pose[0], pose[1])
         if collides and not self._is_terminal_semantic_approach(pose[0]):
-            self._set_guard_block_state(True, reason="static_voxel")
+            self._set_guard_block_state(True, reason="static_walkable")
             now = time.monotonic()
             if now - self._last_static_guard_warn >= 2.0:
                 self._last_static_guard_warn = now

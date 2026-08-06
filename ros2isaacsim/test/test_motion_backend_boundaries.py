@@ -52,15 +52,12 @@ class TestMotionBackendBoundaries(unittest.TestCase):
 
         self.assertEqual(calls[:2], ["recover_view", "wheel_targets"])
 
-    def test_modes_own_distinct_guard_and_odom_policies(self):
-        wheels = motion_backend_for_mode("physx_wheels")
+    def test_contact_backend_owns_measured_odom_without_static_guard(self):
         contact = motion_backend_for_mode("physx_diff_contact")
 
-        self.assertTrue(wheels.uses_collision_guard)
-        self.assertFalse(wheels.uses_measured_odom_twist)
-        self.assertFalse(contact.uses_collision_guard)
         self.assertTrue(contact.uses_measured_odom_twist)
         self.assertFalse(contact.applies_navigation_hold)
+        self.assertIsNone(motion_backend_for_mode("physx_wheels"))
 
     def test_actual_state_estimator_reports_body_frame_velocity(self):
         estimator = ActualMotionStateEstimator()

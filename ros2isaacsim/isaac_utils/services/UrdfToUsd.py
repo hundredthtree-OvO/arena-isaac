@@ -367,8 +367,6 @@ def _mecanum_mode(robot_model: str) -> str:
     model = (robot_model or "").lower()
     if "physx_diff_contact" in model:
         return "physx_diff_contact"
-    if "physx_wheels" in model:
-        return "physx_wheels"
     if "physx_root_velocity" in model or model.endswith("_physx"):
         return "physx_root_velocity"
     if model.endswith("_hybrid"):
@@ -376,12 +374,6 @@ def _mecanum_mode(robot_model: str) -> str:
     if model.endswith("_kinematic"):
         return "kinematic"
     return "joint"
-
-
-def _prebuilt_mecanum_usd_path(robot_model: str) -> str | None:
-    if _mecanum_mode(robot_model) != "physx_wheels":
-        return None
-    return get_package_asset_path("robots", "physx_wheels", "mecanum730_xms5_gripper.usd")
 
 
 def _unified_mecanum_asset_paths(urdf_path: str) -> tuple[Path, Path] | None:
@@ -429,10 +421,6 @@ def _is_complete_unified_usd_asset(cached_usd_path: Path) -> bool:
 def _mecanum_dual_lidar_enabled(robot_model: str) -> bool:
     model = (robot_model or "").lower()
     return is_mecanum_model(model) and ("lidar" in model or "laser" in model)
-
-
-def _handoff_root_path(prim_path: str) -> str:
-    return f"{prim_path}__full_runtime"
 
 
 def _disable_physics_tree(root_path: str):
@@ -952,64 +940,30 @@ def urdf_to_usd(request, response):
     prim_path = Paths.scene.robot(name)
     mecanum_mode = _mecanum_mode(robot_model) if is_mecanum_model(robot_model) else ""
     physical_contact_mecanum = is_mecanum_model(robot_model) and mecanum_mode == "physx_diff_contact"
-    prebuilt_usd_path = _prebuilt_mecanum_usd_path(robot_model) if is_mecanum_model(robot_model) else None
     unified_asset = _unified_mecanum_asset_paths(urdf_path) if is_mecanum_model(robot_model) else None
     unified_urdf_path = None
     unified_usd_path = None
-    nav_usd_path = prebuilt_usd_path
-    full_handoff_enabled = os.environ.get("ARENA_ISAAC_FULL_ASSET_HANDOFF_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
-    handoff_root_path = None
-    handoff_robot_stage_path = None
-    handoff_controller_prim_path = None
     if unified_asset is not None:
         unified_urdf_path, unified_usd_path = unified_asset
-        if mecanum_mode != "physx_wheels":
-            prebuilt_usd_path = str(unified_usd_path) if _is_complete_unified_usd_asset(unified_usd_path) else None
-    if is_mecanum_model(robot_model) and mecanum_mode == "physx_wheels" and not nav_usd_path:
-        if unified_usd_path is None:
-            raise FileNotFoundError("Prebuilt PhysX mecanum asset not found for mode=physx_wheels")
-    if nav_usd_path:
-        if not _reference_usd_into_stage(nav_usd_path, prim_path):
-            raise RuntimeError(f"Failed to reference prebuilt mecanum asset {nav_usd_path} at {prim_path}")
-        usd_path = nav_usd_path
-        print(f"[urdf_import] referenced prebuilt mecanum asset {usd_path} at {prim_path}", file=sys.stderr)
-    else:
-        usd_path = import_urdf(
-            urdf_path,
-            prim_path,
-            name,
-            author_physx_diff_contact=physical_contact_mecanum,
-        )
-        if usd_path is None:
-            return response
-        if unified_usd_path is not None:
-            try:
-                cached_usd = _cache_imported_usd(usd_path, unified_usd_path)
-                if _reference_usd_into_stage(cached_usd, prim_path):
-                    usd_path = cached_usd
-                print(f"[urdf_import] cached unified mecanum asset {cached_usd} from {unified_urdf_path}", file=sys.stderr)
-            except Exception as exc:
-                print(f"[urdf_import] failed to cache unified mecanum asset: {exc}", file=sys.stderr)
+    usd_path = import_urdf(
+        urdf_path,
+        prim_path,
+        name,
+        author_physx_diff_contact=physical_contact_mecanum,
+    )
+    if usd_path is None:
+        return response
+    if unified_usd_path is not None:
+        try:
+            cached_usd = _cache_imported_usd(usd_path, unified_usd_path)
+            if _reference_usd_into_stage(cached_usd, prim_path):
+                usd_path = cached_usd
+            print(f"[urdf_import] cached unified mecanum asset {cached_usd} from {unified_urdf_path}", file=sys.stderr)
+        except Exception as exc:
+            print(f"[urdf_import] failed to cache unified mecanum asset: {exc}", file=sys.stderr)
 
     robot_stage_path = _find_articulation_root(prim_path)
     base_prim_path = _find_descendant_named(prim_path, request.base_frame)
-    prebuilt_physx_mecanum = is_mecanum_model(robot_model) and mecanum_mode == "physx_wheels"
-
-    if prebuilt_physx_mecanum and full_handoff_enabled:
-        full_usd_path = str(unified_usd_path) if (unified_usd_path is not None and _is_complete_unified_usd_asset(unified_usd_path)) else None
-        if full_usd_path and full_usd_path != nav_usd_path:
-            handoff_root_path = _handoff_root_path(prim_path)
-            if not _reference_usd_into_stage(full_usd_path, handoff_root_path):
-                raise RuntimeError(f"Failed to reference full handoff asset {full_usd_path} at {handoff_root_path}")
-            handoff_robot_stage_path = _find_articulation_root(handoff_root_path)
-            handoff_controller_prim_path = handoff_robot_stage_path
-        else:
-            print(
-                f"[urdf_import] full asset handoff requested for {name}, but no distinct unified USD was available; handoff disabled",
-                file=sys.stderr,
-            )
-            full_handoff_enabled = False
-
     # For mecanum hybrid/kinematic teleop, do not let the malformed floating
     # articulation fall under PhysX.  Move the stable wrapper Xform instead of
     # the articulation root.  This is the mode to use for the provided URDF,
@@ -1027,12 +981,6 @@ def urdf_to_usd(request, response):
         f"pose_target={pose_target_path}, controller_prim={controller_prim_path}, mode={mecanum_mode}",
         file=sys.stderr,
     )
-
-    if prebuilt_physx_mecanum:
-        _set_disable_gravity_for_matching_links(controller_prim_path, _MECANUM_ARM_LINK_NAMES, True)
-        _configure_navigation_joint_drives(controller_prim_path)
-        if full_handoff_enabled and handoff_controller_prim_path:
-            _set_disable_gravity_for_matching_links(handoff_controller_prim_path, _MECANUM_ARM_LINK_NAMES, True)
 
     # Apply the requested spawn pose before creating sensors/controllers.
     geom.move(
@@ -1055,10 +1003,7 @@ def urdf_to_usd(request, response):
     lidar_backend = os.environ.get("ARENA_ISAAC_LIDAR_BACKEND", "rtx").strip().lower()
     if dual_lidar_mecanum:
         try:
-            lidar_roots = [controller_prim_path]
-            if full_handoff_enabled and handoff_controller_prim_path:
-                lidar_roots.append(handoff_controller_prim_path)
-            for lidar_root in lidar_roots:
+            for lidar_root in [controller_prim_path]:
                 if lidar_backend in {"synthetic", "synthetic_2d", "2d", "nav_2d"}:
                     create_dual_lidar_mount_frames(
                         robot_root_path=lidar_root,
@@ -1079,18 +1024,10 @@ def urdf_to_usd(request, response):
         except Exception as exc:
             print(f"[urdf_import] Dual lidar setup failed: {exc}", file=sys.stderr)
 
-    if full_handoff_enabled and handoff_root_path:
-        stage = omni.usd.get_context().get_stage()
-        full_root_prim = stage.GetPrimAtPath(handoff_root_path) if stage is not None else None
-        if full_root_prim and full_root_prim.IsValid():
-            full_root_prim.SetActive(False)
-            print(f"[urdf_import] staged full handoff asset inactive at {handoff_root_path}", file=sys.stderr)
-
     stable_kinematic_mecanum = is_mecanum_model(robot_model) and mecanum_mode == "kinematic"
-    single_source_mecanum_tf = stable_kinematic_mecanum or prebuilt_physx_mecanum or physical_contact_mecanum
+    single_source_mecanum_tf = stable_kinematic_mecanum or physical_contact_mecanum
     if single_source_mecanum_tf:
-        # Both stable kinematic and physx_wheels runs use mecanum_teleop.py as
-        # the single authoritative odom/tf source. Do not create Isaac ROS
+        # The controller is the single authoritative odom/tf source. Do not create Isaac ROS
         # bridge odom/tf/joint_state graphs that target a guessed base_link
         # path, because imported/reference assets can differ in hierarchy and
         # Isaac 4.5 may crash the graph when target prims are invalid.
@@ -1098,8 +1035,6 @@ def urdf_to_usd(request, response):
             reason = "stable kinematic mecanum"
         elif physical_contact_mecanum:
             reason = "physical differential-contact mecanum"
-        else:
-            reason = "prebuilt/unified physx mecanum"
         print(
             f"[urdf_import] Skipping Isaac ROS bridge odom/tf/joint_states for {reason} {name}",
             file=sys.stderr,
@@ -1142,10 +1077,6 @@ def urdf_to_usd(request, response):
                 odom_frame=request.odom_frame,
                 base_frame=request.base_frame,
                 asset_root_path=prim_path,
-                handoff_asset_root_path=handoff_root_path,
-                handoff_prim_path=handoff_controller_prim_path,
-                handoff_articulation_path=handoff_robot_stage_path,
-                handoff_nav_base_path=handoff_controller_prim_path,
             )
         else:
             control.Control(

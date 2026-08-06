@@ -48,9 +48,9 @@ def main(args=None):
     parser.add_argument("--name", default="mecanum730_xms5", help="Robot instance name in Isaac stage.")
     parser.add_argument(
         "--mode",
-        choices=["joint", "hybrid", "kinematic", "physx_wheels", "physx_diff_contact"],
-        default="physx_wheels",
-        help="joint = wheel velocity targets only; hybrid = wheel spin + kinematic base fallback; kinematic = base only; physx_wheels = PhysX articulation driven by wheel targets.",
+        choices=["joint", "hybrid", "kinematic", "physx_diff_contact"],
+        default="physx_diff_contact",
+        help="physx_diff_contact = differential wheel-ground contact; joint/hybrid/kinematic are legacy development modes.",
     )
     parser.add_argument("--cmd-vel-topic", default="/cmd_vel")
     parser.add_argument("--base-frame", default="base_link")
@@ -66,7 +66,7 @@ def main(args=None):
 
     parsed, ros_args = parser.parse_known_args(args)
     urdf_path = Path(parsed.urdf_path).expanduser()
-    if parsed.mode != "physx_wheels" and not urdf_path.exists():
+    if not urdf_path.exists():
         raise FileNotFoundError(f"URDF not found: {urdf_path}")
 
     rclpy.init(args=ros_args)

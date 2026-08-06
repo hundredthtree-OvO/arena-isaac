@@ -7,12 +7,7 @@ Examples, run from ~/resources/arena_ws/src/arena/arena-isaac:
   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml export
   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml scheme1 steps
   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml scheme1 check
-  python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml collision2d init
-  python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml collision2d render
-  python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge guard2d
-  python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge voxel_build
-  python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml voxel build
-  python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge voxel_guard
+  python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge physx_diff_contact
   python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml bridge rtx_scan
 """
 from __future__ import annotations
@@ -107,9 +102,7 @@ def _phase_options(profile: Dict[str, Any], phase: str) -> Dict[str, Any]:
 def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str, str]]:
     bridge = profile.get("bridge", {})
     proxy = _phase_section(profile, phase, "proxy")
-    guard = _phase_section(profile, phase, "guard")
-    collision2d = profile.get("collision2d", {})
-    voxel = profile.get("voxel", {})
+    robot_footprint = _phase_section(profile, phase, "robot_footprint")
     pedestrians = _phase_section(profile, phase, "pedestrians")
     robot = _phase_section(profile, phase, "robot")
     robot_geometry = _phase_section(profile, phase, "robot_geometry")
@@ -125,9 +118,11 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         raise RuntimeError(f"unknown phase '{phase}'. Available phases: {', '.join(sorted(phases.keys()))}")
 
     env = os.environ.copy()
+    for key in list(env):
+        if key.startswith("ARENA_ISAAC_COLLISION_GUARD_") or key.startswith("ARENA_ISAAC_VOXEL_"):
+            env.pop(key, None)
+    env.pop("ARENA_ISAAC_ENABLE_KINEMATIC_COLLISION_GUARD", None)
     env["ISAAC_PATH"] = _expand(bridge.get("isaac_path", os.environ.get("ISAAC_PATH", "$HOME/resources/isaac-sim-4.5.0")))
-    env["ARENA_ISAAC_COLLISION_GUARD_OVERLAP_POLICY"] = str(phase_cfg.get("overlap_policy", guard.get("overlap_policy", "escape")))
-    env["ARENA_ISAAC_COLLISION_GUARD_BACKEND"] = str(phase_cfg.get("guard_backend", guard.get("backend", "proxy")))
     env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"] = str(
         proxy.get("door_collision_policy", "disabled")
     )
@@ -146,44 +141,26 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
     env["ARENA_ISAAC_SCENE_DOOR_FRAME_SDF_RESOLUTION"] = str(
         int(proxy.get("door_frame_sdf_resolution", 256))
     )
-    if "escape_epsilon" in guard:
-        env["ARENA_ISAAC_COLLISION_GUARD_ESCAPE_EPS"] = str(guard.get("escape_epsilon"))
-    if "overlap_deadband" in guard:
-        env["ARENA_ISAAC_COLLISION_GUARD_OVERLAP_DEADBAND"] = str(guard.get("overlap_deadband"))
-    if "escape_tolerance" in guard:
-        env["ARENA_ISAAC_COLLISION_GUARD_ESCAPE_TOLERANCE"] = str(guard.get("escape_tolerance"))
-    if "last_free_max_age_sec" in guard:
-        env["ARENA_ISAAC_COLLISION_GUARD_LAST_FREE_MAX_AGE_SEC"] = str(guard.get("last_free_max_age_sec"))
+    footprint_source = robot_footprint
     for key, env_name in (
-        ("footprint_forward", "ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_FORWARD"),
-        ("footprint_rear", "ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_REAR"),
-        ("footprint_left", "ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_LEFT"),
-        ("footprint_right", "ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_RIGHT"),
+        ("length", "ARENA_ISAAC_ROBOT_FOOTPRINT_LENGTH"),
+        ("width", "ARENA_ISAAC_ROBOT_FOOTPRINT_WIDTH"),
+        ("margin", "ARENA_ISAAC_ROBOT_FOOTPRINT_MARGIN"),
     ):
-        if guard.get(key) is not None:
-            env[env_name] = str(guard.get(key))
-    if collision2d.get("config_path"):
-        env["ARENA_ISAAC_COLLISION2D_CONFIG"] = _expand(collision2d.get("config_path"))
-    if collision2d.get("refresh_sec") is not None:
-        env["ARENA_ISAAC_COLLISION2D_REFRESH_SEC"] = str(collision2d.get("refresh_sec"))
-    if voxel.get("map_path"):
-        env["ARENA_ISAAC_VOXEL_MAP_PATH"] = _expand(voxel.get("map_path"))
-    if voxel.get("resolution") is not None:
-        env["ARENA_ISAAC_VOXEL_RESOLUTION"] = str(voxel.get("resolution"))
-    if voxel.get("sample_step") is not None:
-        env["ARENA_ISAAC_VOXEL_SAMPLE_STEP"] = str(voxel.get("sample_step"))
-    if voxel.get("z_min") is not None:
-        env["ARENA_ISAAC_VOXEL_Z_MIN"] = str(voxel.get("z_min"))
-        env["ARENA_ISAAC_VOXEL_GUARD_Z_MIN"] = str(voxel.get("z_min"))
-    if voxel.get("z_max") is not None:
-        env["ARENA_ISAAC_VOXEL_Z_MAX"] = str(voxel.get("z_max"))
-        env["ARENA_ISAAC_VOXEL_GUARD_Z_MAX"] = str(voxel.get("z_max"))
-    if voxel.get("refresh_sec") is not None:
-        env["ARENA_ISAAC_VOXEL_GUARD_REFRESH_SEC"] = str(voxel.get("refresh_sec"))
-    if voxel.get("skip_keywords"):
-        env["ARENA_ISAAC_VOXEL_SKIP_KEYWORDS"] = ",".join(str(x) for x in voxel.get("skip_keywords", []))
-    if voxel.get("include_keywords"):
-        env["ARENA_ISAAC_VOXEL_INCLUDE_KEYWORDS"] = ",".join(str(x) for x in voxel.get("include_keywords", []))
+        if footprint_source.get(key) is not None:
+            env[env_name] = str(footprint_source.get(key))
+    for key, env_name in (
+        ("forward", "ARENA_ISAAC_ROBOT_FOOTPRINT_FORWARD"),
+        ("rear", "ARENA_ISAAC_ROBOT_FOOTPRINT_REAR"),
+        ("left", "ARENA_ISAAC_ROBOT_FOOTPRINT_LEFT"),
+        ("right", "ARENA_ISAAC_ROBOT_FOOTPRINT_RIGHT"),
+    ):
+        if footprint_source.get(key) is not None:
+            env[env_name] = str(footprint_source.get(key))
+    if pedestrians.get("walkable_map_path"):
+        env["ARENA_ISAAC_PEDESTRIAN_WALKABLE_MAP_PATH"] = _expand(
+            pedestrians.get("walkable_map_path")
+        )
     if pedestrians.get("stop_radius_m") is not None:
         env["ARENA_ISAAC_PEDESTRIAN_STOP_RADIUS_M"] = str(pedestrians.get("stop_radius_m"))
     if pedestrians.get("constrained_waypoint_radius_m") is not None:
@@ -352,7 +329,7 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
             env[env_name] = str(value)
     else:
         # A parent shell may retain values from an earlier contact run. Never
-        # let those parameters alter the legacy physx_wheels controller.
+        # let those parameters alter the non-contact controller.
         for env_name in contact_env_keys.values():
             env.pop(env_name, None)
     env["ARENA_ISAAC_FRONT_LASER_FRAME"] = str(lidar.get("front_frame", robot.get("front_laser_frame", "front_laser_link")))
@@ -370,14 +347,9 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         ("spawn_settling_max_lin_speed", "ARENA_ISAAC_SPAWN_SETTLING_MAX_LIN_SPEED"),
         ("spawn_settling_max_ang_speed", "ARENA_ISAAC_SPAWN_SETTLING_MAX_ANG_SPEED"),
         ("spawn_settling_max_z_speed", "ARENA_ISAAC_SPAWN_SETTLING_MAX_Z_SPEED"),
-        ("full_asset_handoff_settling_sec", "ARENA_ISAAC_FULL_ASSET_HANDOFF_SETTLING_SEC"),
-        ("full_asset_handoff_min_stable_sec", "ARENA_ISAAC_FULL_ASSET_HANDOFF_MIN_STABLE_SEC"),
-        ("full_asset_handoff_timeout_sec", "ARENA_ISAAC_FULL_ASSET_HANDOFF_TIMEOUT_SEC"),
     ):
         if robot.get(key) is not None:
             env[env_name] = str(robot.get(key))
-    if robot.get("full_asset_handoff") is not None:
-        env["ARENA_ISAAC_FULL_ASSET_HANDOFF_ENABLED"] = "true" if bool(robot.get("full_asset_handoff")) else "false"
     if robot.get("ground_contact_include_keywords") is not None:
         env["ARENA_ISAAC_ROBOT_GROUND_INCLUDE_KEYWORDS"] = ",".join(str(x) for x in robot.get("ground_contact_include_keywords", []))
     if robot.get("ground_contact_exclude_keywords") is not None:
@@ -465,13 +437,6 @@ def bridge_cmd(profile: Dict[str, Any], phase: str) -> tuple[List[str], Dict[str
         f"scene_collision_enable_door_proxy:={as_bool(proxy.get('enable_door_proxy', True))}",
         f"scene_collision_door_default_enabled:={as_bool(proxy.get('door_default_enabled', False))}",
         f"scene_collision_wall_default_enabled:={as_bool(proxy.get('wall_default_enabled', True))}",
-        f"enable_kinematic_collision_guard:={as_bool(phase_cfg.get('enable_guard', False))}",
-        f"collision_guard_length:={guard.get('length', 0.80)}",
-        f"collision_guard_width:={guard.get('width', 0.60)}",
-        f"collision_guard_margin:={guard.get('margin', 0.05)}",
-        f"collision_guard_z_max:={guard.get('z_max', 1.00)}",
-        f"collision_guard_log_sec:={guard.get('log_sec', 5.0)}",
-        f"collision_guard_block_log_sec:={guard.get('block_log_sec', 2.0)}",
         f"scene_collision_proxy_export_path:={_expand(proxy.get('config_path'))}",
     ]
     return args, env
@@ -490,7 +455,7 @@ def spawn_cmd(profile: Dict[str, Any], phase: str | None = None) -> List[str]:
         "--scene-z", str(s.get("z", 0.0)),
         "--scene-yaw", str(s.get("yaw", 0.0)),
         "--robot-name", str(r.get("name", "xms_mecanum")),
-        "--robot-model", str(r.get("model", "mecanum730_xms5_lidar_physx_wheels")),
+        "--robot-model", str(r.get("model", "mecanum730_xms5_lidar_physx_diff_contact")),
         "--cmd-vel-topic", str(r.get("cmd_vel_topic", "/cmd_vel")),
         "--x", str(r.get("x", 0.0)),
         "--y", str(r.get("y", 0.0)),
@@ -512,71 +477,6 @@ def export_cmds(profile: Dict[str, Any]) -> List[List[str]]:
         ["ros2", "param", "set", "/isaac_controller", "collision_proxy_export_path", str(out)],
         ["ros2", "service", "call", "/isaac/export_collision_proxies", "std_srvs/srv/Trigger", "{}"],
     ]
-
-
-def collision2d_cmd(profile: Dict[str, Any], action: str) -> List[str]:
-    here = Path(__file__).resolve().parent
-    tool = here / "collision2d_tool.py"
-    s = profile.get("scene", {})
-    p = profile.get("proxy", {})
-    c = profile.get("collision2d", {})
-    config_path = _expand(c.get("config_path", "/home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.collision2d.yaml"))
-    if action == "init":
-        return [
-            "python3", str(tool), "init-from-proxies",
-            "--proxy-yaml", _expand(p.get("config_path")),
-            "--out", config_path,
-            "--scene", str(s.get("name", "scene")),
-            "--root-path", str(s.get("root_path", f"/World/{s.get('name', 'scene')}")),
-            "--resolution", str(c.get("resolution", 0.03)),
-        ]
-    if action == "render":
-        return ["python3", str(tool), "render", "--config", config_path, "--out", _expand(c.get("debug_svg", config_path.replace(".yaml", ".svg")))]
-    if action == "summary":
-        return ["python3", str(tool), "summary", "--config", config_path]
-    raise RuntimeError(f"unknown collision2d action: {action}")
-
-
-def voxel_cmds(profile: Dict[str, Any], action: str) -> List[List[str]]:
-    here = Path(__file__).resolve().parent
-    tool = here / "voxel_map_tool.py"
-    s = profile.get("scene", {})
-    v = profile.get("voxel", {})
-    map_path = _expand(v.get("map_path", "/home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.voxel.json.gz"))
-    debug_svg = _expand(v.get("debug_svg", map_path.replace(".json.gz", ".svg").replace(".json", ".svg")))
-    debug_pcd = _expand(v.get("debug_pcd", map_path.replace(".json.gz", ".pcd").replace(".json", ".pcd")))
-    if action == "build":
-        # Requires bridge running and scene already imported.
-        skip = ",".join(str(x) for x in v.get("skip_keywords", []))
-        include = ",".join(str(x) for x in v.get("include_keywords", []))
-        return [[
-            "ros2", "run", "ros2isaacsim", "export_voxel_map",
-            "--scene-root", str(s.get("root_path", f"/World/{s.get('name', 'scene')}")),
-            "--output", map_path,
-            "--debug-svg", debug_svg,
-            "--debug-pcd", debug_pcd,
-            "--resolution", str(v.get("resolution", 0.05)),
-            "--sample-step", str(v.get("sample_step", v.get("resolution", 0.05))),
-            "--z-min", str(v.get("z_min", 0.05)),
-            "--z-max", str(v.get("z_max", 1.20)),
-            "--skip-keywords", skip,
-            "--include-keywords", include,
-            "--max-faces-per-mesh", str(v.get("max_faces_per_mesh", 100000)),
-            "--max-samples-per-mesh", str(v.get("max_samples_per_mesh", 250000)),
-            "--max-stored-voxels", str(v.get("max_stored_voxels", 300000)),
-            "--max-debug-stage-points", str(v.get("max_debug_stage_points", 30000)),
-            "--create-stage-debug-points", str(v.get("create_stage_debug_points", True)).lower(),
-            "--stage-debug-path", str(v.get("stage_debug_path", "")),
-            "--timeout", str(v.get("build_timeout", 900.0)),
-        ]]
-    if action == "summary":
-        return [["python3", str(tool), "summary", "--map", map_path]]
-    if action == "render":
-        return [["python3", str(tool), "render", "--map", map_path, "--out", debug_svg]]
-    if action == "pcd":
-        return [["python3", str(tool), "pcd", "--map", map_path, "--out", debug_pcd]]
-    raise RuntimeError(f"unknown voxel action: {action}")
-
 
 
 def teleop_cmd(profile: Dict[str, Any]) -> List[str]:
@@ -613,7 +513,6 @@ def synthetic_laser_cmd(profile: Dict[str, Any]) -> List[str]:
     lidar = profile.get("lidar", {}) or {}
     synth = lidar.get("synthetic_2d", {}) or {}
     robot = profile.get("robot", {}) or {}
-    voxel = profile.get("voxel", {}) or {}
     params = {
         "use_sim_time": bool(robot.get("use_sim_time", True)),
         "map_yaml_path": _expand(synth.get("map_yaml_path", "")),
@@ -621,7 +520,7 @@ def synthetic_laser_cmd(profile: Dict[str, Any]) -> List[str]:
         "auto_use_map_topic_frame": bool(synth.get("auto_use_map_topic_frame", True)),
         "map_occupied_threshold": synth.get("map_occupied_threshold", 50),
         "map_unknown_is_occupied": bool(synth.get("map_unknown_is_occupied", False)),
-        "map_path": _expand(synth.get("map_path", voxel.get("map_path", ""))),
+        "map_path": _expand(synth.get("map_path", "")),
         "map_frame": synth.get("map_frame", robot.get("odom_frame", "odom")),
         "front_frame": lidar.get("front_frame", "base_scan_01"),
         "rear_frame": lidar.get("rear_frame", "base_scan_02"),
@@ -746,14 +645,10 @@ def main(argv=None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p_bridge = sub.add_parser("bridge")
-    p_bridge.add_argument("phase", choices=["edit", "verify", "guard", "strict", "guard2d", "strict2d", "debug2d", "voxel_build", "voxel_guard", "voxel_strict", "voxel_debug", "social_nav", "rtx_scan", "physx_diff_contact"])
+    p_bridge.add_argument("phase", choices=["edit", "verify", "rtx_scan", "physx_diff_contact"])
     p_spawn = sub.add_parser("spawn")
     p_spawn.add_argument("--phase")
     sub.add_parser("export")
-    p2d = sub.add_parser("collision2d")
-    p2d.add_argument("action", choices=["init", "render", "summary"])
-    pv = sub.add_parser("voxel")
-    pv.add_argument("action", choices=["build", "render", "summary", "pcd"])
     sub.add_parser("teleop")
     p_gamepad = sub.add_parser("gamepad")
     p_gamepad.add_argument("--phase")
@@ -772,15 +667,6 @@ def main(argv=None) -> int:
     if args.cmd == "export":
         rc = 0
         for cmd in export_cmds(profile):
-            rc = run(cmd, dry_run=args.dry_run)
-            if rc != 0:
-                return rc
-        return rc
-    if args.cmd == "collision2d":
-        return run(collision2d_cmd(profile, args.action), dry_run=args.dry_run)
-    if args.cmd == "voxel":
-        rc = 0
-        for cmd in voxel_cmds(profile, args.action):
             rc = run(cmd, dry_run=args.dry_run)
             if rc != 0:
                 return rc

@@ -29,7 +29,6 @@ robot:
   x: 0.0
   y: 0.0
   z: 0.03
-  full_asset_handoff: false
   spawn_settling_sec: 1.0
   spawn_settling_timeout_sec: 4.0
 

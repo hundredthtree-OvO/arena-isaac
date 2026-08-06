@@ -151,7 +151,7 @@ class V10Spawner(Node):
         req.name = parsed.robot_name
         req.urdf_path = str(Path(parsed.urdf_path).expanduser().resolve())
         # The robot_model string selects Isaac-side mecanum mode.
-        # Examples: mecanum730_xms5_lidar_kinematic, mecanum730_xms5_lidar_physx_wheels.
+        # Example: mecanum730_xms5_lidar_physx_diff_contact.
         req.robot_model = parsed.robot_model
         req.no_localization = True
         req.base_frame = parsed.base_frame
@@ -184,7 +184,7 @@ def main(args=None):
         default="/home/stardust/resources/mcp_service/curobo_v3/urdf/motion_wheel_arm_simple_sphere_urdf/mecanum730_xms5_gripper_joint_robotbuilder_link2plus_ee_motion_safe_collision.urdf",
     )
     parser.add_argument("--robot-name", default="xms_mecanum")
-    parser.add_argument("--robot-model", default="mecanum730_xms5_lidar_physx_wheels", help="Mecanum model/mode string passed to /isaac/urdf_to_usd.")
+    parser.add_argument("--robot-model", default="mecanum730_xms5_lidar_physx_diff_contact", help="Mecanum model/mode string passed to /isaac/urdf_to_usd.")
     parser.add_argument("--cmd-vel-topic", default="/cmd_vel")
     parser.add_argument("--base-frame", default="base_link")
     parser.add_argument("--odom-frame", default="odom")
@@ -206,7 +206,7 @@ def main(args=None):
         scene_path = None
     urdf_path = Path(parsed.urdf_path).expanduser().resolve()
     robot_model_lc = str(parsed.robot_model).lower()
-    if "physx_wheels" not in robot_model_lc and not urdf_path.exists():
+    if not urdf_path.exists():
         raise FileNotFoundError(f"URDF not found: {urdf_path}")
 
     rclpy.init(args=ros_args)

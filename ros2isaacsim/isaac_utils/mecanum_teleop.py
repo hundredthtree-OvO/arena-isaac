@@ -12,11 +12,6 @@ Modes:
              come exclusively from PhysX wheel-ground contact; lateral commands,
              root writes, collision-guard filtering, and kinematic fallback are
              intentionally excluded.
-- physx_wheels:
-             use motion-based root control for chassis locomotion while keeping
-             wheel motion as visual rolling only. This is the recommended
-             task-level-realistic mode when the URDF lacks usable wheel/roller
-             collision geometry.
 - hybrid:    send wheel joint velocity targets and kinematically advance the root
              prim. Useful when visual wheel animation is desired but the URDF lacks
              roller collision/contact geometry.
@@ -67,11 +62,6 @@ from ros2isaacsim.physx_diff_contact import (
     separated_tire_wrench,
     single_articulation_targets,
 )
-try:
-    from isaac_utils.collision_guard import KinematicCollisionGuard, config_from_env as collision_guard_config_from_env
-except Exception:  # pragma: no cover - imported inside Isaac Sim normally
-    KinematicCollisionGuard = None  # type: ignore
-    collision_guard_config_from_env = None  # type: ignore
 try:
     from isaac_utils.dynamic_actor_guard import (
         RobotGuardState,
@@ -188,7 +178,7 @@ class MecanumConfig:
     # Joint sign convention may need tuning after first physical test.
     # Default is chosen for a common X mecanum layout.
     wheel_signs: List[float] = field(default_factory=lambda: [1.0, -1.0, 1.0, -1.0])
-    mode: str = "joint"  # joint | physx_diff_contact | physx_wheels | hybrid | kinematic | physx_root_velocity
+    mode: str = "joint"  # joint | physx_diff_contact | hybrid | kinematic | physx_root_velocity
     timeout_sec: float = 0.5
     differential_timeout_sec: float = 0.30
     # v18: optional velocity slew-rate limiter for more realistic mobile-base
@@ -217,10 +207,6 @@ class MecanumConfig:
     spawn_settling_max_lin_speed: float = 0.03
     spawn_settling_max_ang_speed: float = 0.15
     spawn_settling_max_z_speed: float = 0.02
-    full_asset_handoff_enabled: bool = False
-    full_asset_handoff_settling_sec: float = 0.6
-    full_asset_handoff_min_stable_sec: float = 0.2
-    full_asset_handoff_timeout_sec: float = 2.0
 
 
 def is_mecanum_model(robot_model: str) -> bool:
@@ -236,7 +222,6 @@ def parse_mecanum_config(robot_model: str) -> MecanumConfig:
       - mecanum730_xms5_hybrid
       - mecanum730_xms5_kinematic
       - mecanum730_xms5_lidar_physx_root_velocity
-      - mecanum730_xms5_lidar_physx_wheels
       - mecanum730_xms5_lidar_physx_diff_contact
       - mecanum730_xms5_physx
     """
@@ -244,8 +229,6 @@ def parse_mecanum_config(robot_model: str) -> MecanumConfig:
     model = (robot_model or "").lower()
     if "physx_diff_contact" in model:
         config.mode = "physx_diff_contact"
-    elif "physx_wheels" in model:
-        config.mode = "physx_wheels"
     elif "physx_root_velocity" in model or model.endswith("_physx"):
         config.mode = "physx_root_velocity"
     elif model.endswith("_hybrid"):
@@ -367,10 +350,6 @@ def parse_mecanum_config(robot_model: str) -> MecanumConfig:
     config.spawn_settling_max_lin_speed = max(0.0, _env_float("ARENA_ISAAC_SPAWN_SETTLING_MAX_LIN_SPEED", config.spawn_settling_max_lin_speed))
     config.spawn_settling_max_ang_speed = max(0.0, _env_float("ARENA_ISAAC_SPAWN_SETTLING_MAX_ANG_SPEED", config.spawn_settling_max_ang_speed))
     config.spawn_settling_max_z_speed = max(0.0, _env_float("ARENA_ISAAC_SPAWN_SETTLING_MAX_Z_SPEED", config.spawn_settling_max_z_speed))
-    config.full_asset_handoff_enabled = _env_bool("ARENA_ISAAC_FULL_ASSET_HANDOFF_ENABLED", config.full_asset_handoff_enabled)
-    config.full_asset_handoff_settling_sec = max(0.0, _env_float("ARENA_ISAAC_FULL_ASSET_HANDOFF_SETTLING_SEC", config.full_asset_handoff_settling_sec))
-    config.full_asset_handoff_min_stable_sec = max(0.0, _env_float("ARENA_ISAAC_FULL_ASSET_HANDOFF_MIN_STABLE_SEC", config.full_asset_handoff_min_stable_sec))
-    config.full_asset_handoff_timeout_sec = max(config.full_asset_handoff_settling_sec, _env_float("ARENA_ISAAC_FULL_ASSET_HANDOFF_TIMEOUT_SEC", config.full_asset_handoff_timeout_sec))
     hold_positions = _env_float_list("ARENA_ISAAC_ARM_HOLD_POSITIONS", len(config.arm_hold_joints))
     if hold_positions is not None:
         config.arm_hold_positions = hold_positions
@@ -612,10 +591,6 @@ class MecanumRobot:
         odom_frame: str = "odom",
         base_frame: str = "base_link",
         asset_root_path: Optional[str] = None,
-        handoff_asset_root_path: Optional[str] = None,
-        handoff_prim_path: Optional[str] = None,
-        handoff_articulation_path: Optional[str] = None,
-        handoff_nav_base_path: Optional[str] = None,
     ):
 
         self.name = name
@@ -623,10 +598,6 @@ class MecanumRobot:
         self.articulation_path = articulation_path or prim_path
         self.nav_base_path = nav_base_path or prim_path
         self.asset_root_path = asset_root_path or prim_path
-        self.handoff_asset_root_path = handoff_asset_root_path
-        self.handoff_prim_path = handoff_prim_path
-        self.handoff_articulation_path = handoff_articulation_path or handoff_prim_path
-        self.handoff_nav_base_path = handoff_nav_base_path or handoff_prim_path
         self.cmd_vel_topic = cmd_vel_topic
         self.config = config
         self._motion_backend = motion_backend_for_mode(config.mode)
@@ -748,7 +719,6 @@ class MecanumRobot:
         self._spawn_orientation_wxyz = None
         self._kinematic_pos = None
         self._initialized = False
-        self._collision_guard = None
         self._smooth_vx = 0.0
         self._smooth_vy = 0.0
         self._smooth_wz = 0.0
@@ -770,8 +740,6 @@ class MecanumRobot:
             "ARENA_ISAAC_DIFF_DIAGNOSTICS_RUN_LABEL",
             "default",
         ).strip() or "default"
-        self._motion_nominal_z = None
-        self._warned_motion_root_fallback = False
         self._gripper_joint_indices: Optional[List[int]] = None
         self._roller_joint_indices: Optional[List[int]] = None
         self._roller_hold_positions: Optional[np.ndarray] = None
@@ -782,7 +750,6 @@ class MecanumRobot:
         self._settling_stable_started_at: Optional[float] = None
         self._settling_prev_pos: Optional[np.ndarray] = None
         self._settling_prev_yaw: Optional[float] = None
-        self._handoff_completed = False
         self._warned_missing_articulation_controller = False
         self._warned_joint_hold_failure = False
         self._warned_wheel_target_failure = False
@@ -980,7 +947,6 @@ class MecanumRobot:
         self._actual_state_estimator.reset()
         self._measured_vx = self._measured_vy = self._measured_wz = 0.0
         self._physx_nominal_z = float(position[2])
-        self._motion_nominal_z = float(position[2])
         self._kinematic_pos = position.copy()
         self._spawn_orientation_wxyz = orientation.copy()
         self._heading = 0.0
@@ -1099,13 +1065,11 @@ class MecanumRobot:
             if self.config.mode == "kinematic":
                 self._articulation = None
                 self._joint_indices = []
-                self._maybe_create_collision_guard()
                 self._initialized = True
                 self._initialize_settling_state()
-                guard_state = "enabled" if self._collision_guard is not None else "disabled"
                 self._log_info(
                     f"[{self.name}] mecanum controller initialized: mode={self.config.mode}, "
-                    f"prim={self.prim_path}, direct USD kinematic root, collision_guard={guard_state}, "
+                    f"prim={self.prim_path}, direct USD kinematic root, "
                     f"smoothing={'enabled' if self.config.smoothing_enabled else 'disabled'}"
                 )
                 return True
@@ -1163,10 +1127,8 @@ class MecanumRobot:
                     self._log_warn(f"[{self.name}] mecanum controller init failed: {exc}")
                     return False
 
-            self._maybe_create_collision_guard()
             self._initialized = True
             self._initialize_settling_state()
-            guard_state = "enabled" if self._collision_guard is not None else "disabled"
             self._log_info(
                 f"[{self.name}] mecanum controller initialized: mode={self.config.mode}, "
                 f"prim={self.prim_path}, articulation={self.articulation_path}, joints={self.config.wheel_joints}, indices={self._joint_indices}, "
@@ -1176,7 +1138,7 @@ class MecanumRobot:
                 f"max_wheel_speed={self.config.max_wheel_speed:.3f}, "
                 f"diff_gains=({self.config.differential_linear_gain:.3f}, "
                 f"{self.config.differential_angular_gain:.3f}), "
-                f"collision_guard={guard_state}, smoothing={'enabled' if self.config.smoothing_enabled else 'disabled'}"
+                f"smoothing={'enabled' if self.config.smoothing_enabled else 'disabled'}"
             )
             return True
         except Exception as exc:
@@ -1222,75 +1184,12 @@ class MecanumRobot:
         self._settling_prev_pos = None
         self._settling_prev_yaw = None
         self._physx_nominal_z = None
-        self._motion_nominal_z = None
         self._warned_physx_velocity_fallback = False
-        self._warned_motion_root_fallback = False
         msg = f"[{self.name}] spawn settling complete: {reason}; controller entering ready state"
         if warn:
             self._log_warn(msg)
         else:
             self._log_info(msg)
-
-    def _perform_full_asset_handoff(self) -> bool:
-        if self._handoff_completed or not self.config.full_asset_handoff_enabled:
-            return False
-        if not self.handoff_asset_root_path or not self.handoff_prim_path:
-            return False
-        stage = get_current_stage()
-        if stage is None:
-            return False
-        nav_root = stage.GetPrimAtPath(self.asset_root_path)
-        full_root = stage.GetPrimAtPath(self.handoff_asset_root_path)
-        if full_root is None or not full_root.IsValid():
-            self._log_warn(f"[{self.name}] full-asset handoff requested but target root is invalid: {self.handoff_asset_root_path}")
-            return False
-        try:
-            pos, quat = _get_usd_xform_pose(self.prim_path)
-        except Exception as exc:
-            self._log_warn(f"[{self.name}] failed to capture nav pose before handoff: {exc}")
-            return False
-        old_asset_root = self.asset_root_path
-        try:
-            full_root.SetActive(True)
-            _set_usd_xform_pose(self.handoff_prim_path, pos, quat)
-            if nav_root is not None and nav_root.IsValid():
-                nav_root.SetActive(False)
-        except Exception as exc:
-            self._log_warn(f"[{self.name}] failed during full-asset handoff activation: {exc}")
-            return False
-
-        self.asset_root_path = self.handoff_asset_root_path
-        self.prim_path = self.handoff_prim_path
-        self.articulation_path = self.handoff_articulation_path or self.handoff_prim_path
-        self.nav_base_path = self.handoff_nav_base_path or self.handoff_prim_path
-        self._articulation = None
-        self._xform = None
-        self._joint_indices = None
-        self._arm_joint_indices = None
-        self._gripper_joint_indices = None
-        self._roller_joint_indices = None
-        self._roller_hold_positions = None
-        self._collision_guard = None
-        self._initialized = False
-        self._static_tf_sent = False
-        self._handoff_completed = True
-        self._hold_drive_configured = False
-        self._warned_hold_drive_no_match = False
-        self._hold_drive_configured_paths.clear()
-        self._hold_gravity_configured_paths.clear()
-        self._last_hold_scene_constraint_time = 0.0
-        self._smooth_vx = self._smooth_vy = self._smooth_wz = 0.0
-        self._applied_vx = self._applied_vy = self._applied_wz = 0.0
-        self._restart_settling_state(
-            warmup_sec=self.config.full_asset_handoff_settling_sec,
-            min_stable_sec=self.config.full_asset_handoff_min_stable_sec,
-            timeout_sec=self.config.full_asset_handoff_timeout_sec,
-        )
-        self._log_info(
-            f"[{self.name}] full-asset handoff complete: nav_root={old_asset_root} "
-            f"-> full_root={self.handoff_asset_root_path}; re-entering settling"
-        )
-        return True
 
     def _settling_metrics(self, pos: np.ndarray, quat: np.ndarray, dt: float):
         yaw = _quat_wxyz_to_yaw(quat)
@@ -1375,8 +1274,6 @@ class MecanumRobot:
             if self._settling_stable_started_at is None:
                 self._settling_stable_started_at = float(now)
             elif (now - self._settling_stable_started_at) >= self.config.spawn_settling_min_stable_sec:
-                if self._perform_full_asset_handoff():
-                    return True
                 self._finish_settling(
                     reason=(
                         f"stable pose confirmed "
@@ -1389,61 +1286,21 @@ class MecanumRobot:
         return True
 
 
-    def _maybe_create_collision_guard(self):
-        if self._collision_guard is not None:
-            return
-        if self._motion_backend is not None and not self._motion_backend.uses_collision_guard:
-            self._log_info(
-                f"[{self.name}] collision_guard disabled for {self.config.mode}; "
-                "static blocking is delegated to PhysX contacts"
-            )
-            return
-        enabled = str(os.environ.get("ARENA_ISAAC_ENABLE_KINEMATIC_COLLISION_GUARD", "true")).strip().lower() in {"1", "true", "yes", "on"}
-        if not enabled:
-            self._log_info(f"[{self.name}] collision_guard disabled by ARENA_ISAAC_ENABLE_KINEMATIC_COLLISION_GUARD")
-            return
-        if KinematicCollisionGuard is None or collision_guard_config_from_env is None:
-            self._log_warn(f"[{self.name}] collision guard requested but isaac_utils.collision_guard is unavailable")
-            return
-        try:
-            cfg = collision_guard_config_from_env()
-            if not cfg.enabled:
-                self._log_info(f"[{self.name}] collision_guard config disabled")
-                return
-            self._collision_guard = KinematicCollisionGuard(robot_name=self.name, logger=self.logger, config=cfg)
-            self._collision_guard.refresh(force=True)
-            backend = os.environ.get("ARENA_ISAAC_COLLISION_GUARD_BACKEND", "proxy")
-            self._log_info(f"[{self.name}] collision_guard initialized: backend={backend}, length={cfg.length:.3f}, width={cfg.width:.3f}, margin={cfg.margin:.3f}")
-        except Exception as exc:
-            self._collision_guard = None
-            self._log_warn(f"[{self.name}] failed to initialize collision guard: {exc}")
-
     def _guard_extents(self):
-        if self._collision_guard is not None:
-            cfg = self._collision_guard.config
-            return footprint_extents(
-                length=cfg.length,
-                width=cfg.width,
-                margin=cfg.margin,
-                footprint_forward=cfg.footprint_forward,
-                footprint_rear=cfg.footprint_rear,
-                footprint_left=cfg.footprint_left,
-                footprint_right=cfg.footprint_right,
-            )
         return footprint_extents(
             length=_env_float(
-                "ARENA_ISAAC_COLLISION_GUARD_LENGTH",
+                "ARENA_ISAAC_ROBOT_FOOTPRINT_LENGTH",
                 2.0 * float(self.config.half_length),
             ),
             width=_env_float(
-                "ARENA_ISAAC_COLLISION_GUARD_WIDTH",
+                "ARENA_ISAAC_ROBOT_FOOTPRINT_WIDTH",
                 2.0 * float(self.config.half_width),
             ),
-            margin=_env_float("ARENA_ISAAC_COLLISION_GUARD_MARGIN", 0.05),
-            footprint_forward=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_FORWARD", -1.0),
-            footprint_rear=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_REAR", -1.0),
-            footprint_left=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_LEFT", -1.0),
-            footprint_right=_env_float("ARENA_ISAAC_COLLISION_GUARD_FOOTPRINT_RIGHT", -1.0),
+            margin=_env_float("ARENA_ISAAC_ROBOT_FOOTPRINT_MARGIN", 0.05),
+            footprint_forward=_env_float("ARENA_ISAAC_ROBOT_FOOTPRINT_FORWARD", -1.0),
+            footprint_rear=_env_float("ARENA_ISAAC_ROBOT_FOOTPRINT_REAR", -1.0),
+            footprint_left=_env_float("ARENA_ISAAC_ROBOT_FOOTPRINT_LEFT", -1.0),
+            footprint_right=_env_float("ARENA_ISAAC_ROBOT_FOOTPRINT_RIGHT", -1.0),
         )
 
     def _current_guard_pose(self):
@@ -1935,10 +1792,6 @@ class MecanumRobot:
             self.prim_path,
             self.nav_base_path,
             self.articulation_path,
-            self.handoff_asset_root_path,
-            self.handoff_prim_path,
-            self.handoff_nav_base_path,
-            self.handoff_articulation_path,
         ):
             if not path:
                 continue
@@ -2455,23 +2308,6 @@ class MecanumRobot:
         self._smooth_wz = _slew_axis(self._smooth_wz, wz, dt, c.max_angular_accel, c.max_angular_decel)
         return self._smooth_vx, self._smooth_vy, self._smooth_wz
 
-    def _filter_with_collision_guard(self, pos_xyz, heading: float, vx: float, vy: float, wz: float, dt: float, label: str):
-        guard_mode = "unguarded"
-        if self._collision_guard is not None and dt > 0.0:
-            try:
-                vx, vy, wz, guard_mode = self._collision_guard.filter_motion(
-                    pos_xyz=pos_xyz,
-                    heading=heading,
-                    vx=vx,
-                    vy=vy,
-                    wz=wz,
-                    dt=dt,
-                )
-            except Exception as exc:
-                self._log_warn(f"[{self.name}] collision guard failed; allowing {label} step: {exc}")
-                guard_mode = "guard_error_allow"
-        return float(vx), float(vy), float(wz), str(guard_mode)
-
     def _compute_physx_root_velocity_world(self, vx: float, vy: float, wz: float, pos, quat):
         c = self.config
         yaw = _quat_wxyz_to_yaw(quat)
@@ -2548,10 +2384,8 @@ class MecanumRobot:
         except Exception as exc:
             self._log_warn(f"[{self.name}] cannot read root pose for PhysX velocity mode: {exc}")
             return
-        heading = _quat_wxyz_to_yaw(quat)
-        vx, vy, wz, guard_mode = self._filter_with_collision_guard(pos, heading, vx, vy, wz, dt, "physx_root_velocity")
         self._applied_vx, self._applied_vy, self._applied_wz = float(vx), float(vy), float(wz)
-        self._last_guard_mode = guard_mode
+        self._last_guard_mode = "unguarded"
         self._publish_applied_cmd_vel()
 
         lin_w, ang_w, _yaw = self._compute_physx_root_velocity_world(vx, vy, wz, pos, quat)
@@ -2572,79 +2406,6 @@ class MecanumRobot:
         # fallback has had a chance to update the root.
         self._publish_actual_odom_tf()
 
-    def _apply_motion_based_root(self, pos, quat, vx: float, vy: float, wz: float, dt: float) -> bool:
-        if dt <= 0.0:
-            return False
-        if self._motion_nominal_z is None:
-            self._motion_nominal_z = float(pos[2])
-
-        yaw = _quat_wxyz_to_yaw(quat)
-        planar_quat = _yaw_to_quat_wxyz(yaw)
-        lin_w = _quat_apply_wxyz(planar_quat, (vx, vy, 0.0))
-        next_yaw = yaw + float(wz) * float(dt)
-        target_pos = np.array([
-            float(pos[0]) + float(lin_w[0]) * float(dt),
-            float(pos[1]) + float(lin_w[1]) * float(dt),
-            float(self._motion_nominal_z),
-        ], dtype=np.float32)
-        target_quat = _yaw_to_quat_wxyz(next_yaw)
-
-        wrote_pose = False
-        if self._articulation is not None and hasattr(self._articulation, "write_root_pose_to_sim"):
-            try:
-                try:
-                    import torch  # type: ignore
-                    root_pose = torch.tensor(
-                        [[
-                            float(target_pos[0]),
-                            float(target_pos[1]),
-                            float(target_pos[2]),
-                            float(target_quat[0]),
-                            float(target_quat[1]),
-                            float(target_quat[2]),
-                            float(target_quat[3]),
-                        ]],
-                        dtype=torch.float32,
-                    )
-                except Exception:
-                    root_pose = np.array([[
-                        float(target_pos[0]),
-                        float(target_pos[1]),
-                        float(target_pos[2]),
-                        float(target_quat[0]),
-                        float(target_quat[1]),
-                        float(target_quat[2]),
-                        float(target_quat[3]),
-                    ]], dtype=np.float32)
-                self._articulation.write_root_pose_to_sim(root_pose)
-                wrote_pose = True
-            except Exception as exc:
-                self._log_warn(f"[{self.name}] write_root_pose_to_sim failed: {exc}")
-
-        lin_cmd, ang_cmd, _ = self._compute_physx_root_velocity_world(vx, vy, wz, pos, quat)
-        wrote_velocity = self._write_root_velocity_command(lin_cmd, ang_cmd)
-
-        if not wrote_pose:
-            try:
-                _set_usd_xform_pose(self.prim_path, target_pos, target_quat)
-                wrote_pose = True
-            except Exception as exc:
-                if not self._warned_motion_root_fallback:
-                    self._warned_motion_root_fallback = True
-                    self._log_warn(f"[{self.name}] motion-based root pose fallback failed: {exc}")
-
-        return bool(wrote_pose or wrote_velocity)
-
-    def _current_base_pose_for_motion(self):
-        try:
-            pos, quat = _get_usd_xform_pose(self.prim_path)
-            heading = _quat_wxyz_to_yaw(quat)
-        except Exception:
-            pos = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-            quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
-            heading = 0.0
-        return pos, quat, heading
-
     def _apply_kinematic_base(self, vx: float, vy: float, wz: float, dt: float):
         # Direct USD kinematic control.  Do not instantiate XFormPrim or
         # Articulation here; the robot is intentionally non-physical in this
@@ -2658,9 +2419,8 @@ class MecanumRobot:
             except Exception:
                 return
 
-        vx, vy, wz, guard_mode = self._filter_with_collision_guard(self._kinematic_pos, self._heading, vx, vy, wz, dt, "kinematic")
         self._applied_vx, self._applied_vy, self._applied_wz = float(vx), float(vy), float(wz)
-        self._last_guard_mode = str(guard_mode)
+        self._last_guard_mode = "unguarded"
         self._publish_applied_cmd_vel()
 
         self._heading += wz * dt
@@ -2826,10 +2586,6 @@ class MecanumTeleopManager:
         odom_frame: str = "odom",
         base_frame: str = "base_link",
         asset_root_path: Optional[str] = None,
-        handoff_asset_root_path: Optional[str] = None,
-        handoff_prim_path: Optional[str] = None,
-        handoff_articulation_path: Optional[str] = None,
-        handoff_nav_base_path: Optional[str] = None,
     ):
 
         if not self.node:
@@ -2850,10 +2606,6 @@ class MecanumTeleopManager:
             odom_frame=odom_frame,
             base_frame=base_frame,
             asset_root_path=asset_root_path,
-            handoff_asset_root_path=handoff_asset_root_path,
-            handoff_prim_path=handoff_prim_path,
-            handoff_articulation_path=handoff_articulation_path,
-            handoff_nav_base_path=handoff_nav_base_path,
         )
         self.robots[name] = robot
 
@@ -2878,8 +2630,7 @@ class MecanumTeleopManager:
             f"Registered mecanum teleop robot {name}: prim={prim_path}, nav_base={nav_base_path or prim_path}, "
             f"articulation={articulation_path or prim_path}, topic={cmd_vel_topic}, "
             f"diff_topic={differential_topic or 'disabled'}, mode={config.mode}, "
-            f"actual_odom_tf={robot.publish_actual_odom_tf}, odom_topic={robot.odom_topic}, applied_topic={robot.applied_cmd_vel_topic}, "
-            f"handoff={'enabled' if robot.config.full_asset_handoff_enabled and handoff_prim_path else 'disabled'}"
+            f"actual_odom_tf={robot.publish_actual_odom_tf}, odom_topic={robot.odom_topic}, applied_topic={robot.applied_cmd_vel_topic}"
         )
 
     def update(self):

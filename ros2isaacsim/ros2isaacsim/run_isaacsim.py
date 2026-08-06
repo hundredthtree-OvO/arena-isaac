@@ -615,10 +615,8 @@ def export_collision_proxies_service(controller):
     return controller.create_service(Trigger, "/isaac/export_collision_proxies", _callback)
 
 
-# ============================v15 voxel map build service==========================
-
-def _default_voxel_scene_root():
-    env = os.environ.get("ARENA_ISAAC_VOXEL_SCENE_ROOT", "").strip()
+def _default_walkable_scene_root():
+    env = os.environ.get("ARENA_ISAAC_WALKABLE_SCENE_ROOT", "").strip()
     if env:
         return env
     try:
@@ -627,68 +625,6 @@ def _default_voxel_scene_root():
     except Exception:
         pass
     return "/World/shenxinfu_841837"
-
-
-def _default_voxel_map_path():
-    return os.environ.get(
-        "ARENA_ISAAC_VOXEL_MAP_PATH",
-        "/home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.voxel.json.gz",
-    )
-
-
-def build_voxel_map_service(controller):
-    def _get_param(name, default):
-        try:
-            v = controller.get_parameter(name).value
-            return default if v is None or v == "" else v
-        except Exception:
-            return default
-
-    def _callback(request, response):
-        try:
-            from isaac_utils.voxel_stage_builder import VoxelBuildConfig, build_voxel_map_from_stage, DEFAULT_SKIP_KEYWORDS
-            scene_root = str(_get_param("voxel_map_scene_root", _default_voxel_scene_root()))
-            output_path = str(_get_param("voxel_map_output_path", _default_voxel_map_path()))
-            debug_svg = str(_get_param("voxel_map_debug_svg_path", output_path.replace(".json.gz", ".svg").replace(".json", ".svg")))
-            debug_pcd = str(_get_param("voxel_map_debug_pcd_path", output_path.replace(".json.gz", ".pcd").replace(".json", ".pcd")))
-            resolution = float(_get_param("voxel_map_resolution", float(os.environ.get("ARENA_ISAAC_VOXEL_RESOLUTION", "0.05"))))
-            sample_step = float(_get_param("voxel_map_sample_step", float(os.environ.get("ARENA_ISAAC_VOXEL_SAMPLE_STEP", str(resolution)))))
-            z_min = float(_get_param("voxel_map_z_min", float(os.environ.get("ARENA_ISAAC_VOXEL_Z_MIN", "0.05"))))
-            z_max = float(_get_param("voxel_map_z_max", float(os.environ.get("ARENA_ISAAC_VOXEL_Z_MAX", "1.20"))))
-            skip_raw = str(_get_param("voxel_map_skip_keywords", os.environ.get("ARENA_ISAAC_VOXEL_SKIP_KEYWORDS", ",".join(DEFAULT_SKIP_KEYWORDS))))
-            include_raw = str(_get_param("voxel_map_include_keywords", os.environ.get("ARENA_ISAAC_VOXEL_INCLUDE_KEYWORDS", "")))
-            skip_keywords = [x.strip() for x in skip_raw.split(",") if x.strip()]
-            include_keywords = [x.strip() for x in include_raw.split(",") if x.strip()]
-            cfg = VoxelBuildConfig(
-                scene_root=scene_root,
-                output_path=output_path,
-                debug_svg_path=debug_svg,
-                debug_pcd_path=debug_pcd,
-                resolution=resolution,
-                sample_step=sample_step,
-                z_min=z_min,
-                z_max=z_max,
-                skip_keywords=skip_keywords,
-                include_keywords=include_keywords,
-                max_faces_per_mesh=int(_get_param("voxel_map_max_faces_per_mesh", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_FACES_PER_MESH", "100000")))),
-                max_samples_per_mesh=int(_get_param("voxel_map_max_samples_per_mesh", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_SAMPLES_PER_MESH", "250000")))),
-                max_stored_voxels=int(_get_param("voxel_map_max_stored_voxels", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_STORED_VOXELS", "300000")))),
-                max_debug_stage_points=int(_get_param("voxel_map_max_debug_stage_points", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_DEBUG_STAGE_POINTS", "30000")))),
-                create_stage_debug_points=str(_get_param("voxel_map_create_stage_debug_points", os.environ.get("ARENA_ISAAC_VOXEL_CREATE_STAGE_DEBUG_POINTS", "true"))).lower() in {"1", "true", "yes", "on"},
-                stage_debug_path=str(_get_param("voxel_map_stage_debug_path", os.environ.get("ARENA_ISAAC_VOXEL_STAGE_DEBUG_PATH", ""))),
-            )
-            data = build_voxel_map_from_stage(cfg, logger=controller.get_logger())
-            response.success = True
-            response.message = (
-                f"voxel map built: columns={data.get('column_count')} stored_voxels={data.get('stored_voxel_count')} "
-                f"meshes={data.get('mesh_count_used')}/{data.get('mesh_count_seen')} output={output_path} svg={debug_svg} pcd={debug_pcd}"
-            )
-        except Exception as exc:
-            response.success = False
-            response.message = f"failed to build voxel map: {exc}"
-        return response
-
-    return controller.create_service(Trigger, "/isaac/build_voxel_map", _callback)
 
 
 def export_walkable_map_service(controller):
@@ -790,24 +726,7 @@ def create_controller(time=120):
     try:
         controller.declare_parameter("collision_proxy_export_path", _default_proxy_export_path())
         controller.declare_parameter("collision_proxy_export_scene_root", os.environ.get("ARENA_ISAAC_COLLISION_PROXY_EXPORT_SCENE_ROOT", ""))
-        # V15 voxel-map build parameters. These are set by scripts/arena_scene_profile.py voxel build.
-        controller.declare_parameter("voxel_map_scene_root", _default_voxel_scene_root())
-        controller.declare_parameter("voxel_map_output_path", _default_voxel_map_path())
-        controller.declare_parameter("voxel_map_debug_svg_path", _default_voxel_map_path().replace(".json.gz", ".svg").replace(".json", ".svg"))
-        controller.declare_parameter("voxel_map_debug_pcd_path", _default_voxel_map_path().replace(".json.gz", ".pcd").replace(".json", ".pcd"))
-        controller.declare_parameter("voxel_map_resolution", float(os.environ.get("ARENA_ISAAC_VOXEL_RESOLUTION", "0.05")))
-        controller.declare_parameter("voxel_map_sample_step", float(os.environ.get("ARENA_ISAAC_VOXEL_SAMPLE_STEP", os.environ.get("ARENA_ISAAC_VOXEL_RESOLUTION", "0.05"))))
-        controller.declare_parameter("voxel_map_z_min", float(os.environ.get("ARENA_ISAAC_VOXEL_Z_MIN", "0.05")))
-        controller.declare_parameter("voxel_map_z_max", float(os.environ.get("ARENA_ISAAC_VOXEL_Z_MAX", "1.20")))
-        controller.declare_parameter("voxel_map_skip_keywords", os.environ.get("ARENA_ISAAC_VOXEL_SKIP_KEYWORDS", ""))
-        controller.declare_parameter("voxel_map_include_keywords", os.environ.get("ARENA_ISAAC_VOXEL_INCLUDE_KEYWORDS", ""))
-        controller.declare_parameter("voxel_map_max_faces_per_mesh", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_FACES_PER_MESH", "100000")))
-        controller.declare_parameter("voxel_map_max_samples_per_mesh", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_SAMPLES_PER_MESH", "250000")))
-        controller.declare_parameter("voxel_map_max_stored_voxels", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_STORED_VOXELS", "300000")))
-        controller.declare_parameter("voxel_map_max_debug_stage_points", int(os.environ.get("ARENA_ISAAC_VOXEL_MAX_DEBUG_STAGE_POINTS", "30000")))
-        controller.declare_parameter("voxel_map_create_stage_debug_points", os.environ.get("ARENA_ISAAC_VOXEL_CREATE_STAGE_DEBUG_POINTS", "true"))
-        controller.declare_parameter("voxel_map_stage_debug_path", os.environ.get("ARENA_ISAAC_VOXEL_STAGE_DEBUG_PATH", ""))
-        controller.declare_parameter("walkable_map_scene_root", _default_voxel_scene_root())
+        controller.declare_parameter("walkable_map_scene_root", _default_walkable_scene_root())
         controller.declare_parameter(
             "walkable_map_output_path",
             "/home/stardust/resources/arena_ws/arena_assets/navigation/"
@@ -846,7 +765,6 @@ def create_controller(time=120):
     spawn_floor(controller)
     spawn_door(controller)
     export_collision_proxies_service(controller)
-    build_voxel_map_service(controller)
     export_walkable_map_service(controller)
     origin_collision_probe_service(controller)
     scene_collision_probe_service(controller)

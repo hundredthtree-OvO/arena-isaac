@@ -33,13 +33,6 @@ def generate_launch_description():
     scene_collision_door_default_enabled = LaunchConfiguration("scene_collision_door_default_enabled")
     scene_collision_wall_default_enabled = LaunchConfiguration("scene_collision_wall_default_enabled")
     scene_collision_proxy_export_path = LaunchConfiguration("scene_collision_proxy_export_path")
-    enable_kinematic_collision_guard = LaunchConfiguration("enable_kinematic_collision_guard")
-    collision_guard_length = LaunchConfiguration("collision_guard_length")
-    collision_guard_width = LaunchConfiguration("collision_guard_width")
-    collision_guard_margin = LaunchConfiguration("collision_guard_margin")
-    collision_guard_z_max = LaunchConfiguration("collision_guard_z_max")
-    collision_guard_log_sec = LaunchConfiguration("collision_guard_log_sec")
-    collision_guard_block_log_sec = LaunchConfiguration("collision_guard_block_log_sec")
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -152,41 +145,6 @@ def generate_launch_description():
             default_value="/home/stardust/resources/arena_ws/arena_assets/collision_configs/shenxinfu_841837.proxies.yaml",
             description="Default output path used by /isaac/export_collision_proxies Trigger service.",
         ),
-        DeclareLaunchArgument(
-            "enable_kinematic_collision_guard",
-            default_value="true",
-            description="V13: reject kinematic robot steps that would overlap scene collision proxies.",
-        ),
-        DeclareLaunchArgument(
-            "collision_guard_length",
-            default_value="0.80",
-            description="V13 robot collision footprint length in meters.",
-        ),
-        DeclareLaunchArgument(
-            "collision_guard_width",
-            default_value="0.60",
-            description="V13 robot collision footprint width in meters.",
-        ),
-        DeclareLaunchArgument(
-            "collision_guard_margin",
-            default_value="0.05",
-            description="V13 robot collision footprint margin in meters.",
-        ),
-        DeclareLaunchArgument(
-            "collision_guard_z_max",
-            default_value="1.00",
-            description="V13 obstacle z upper bound considered by the 2D collision guard.",
-        ),
-        DeclareLaunchArgument(
-            "collision_guard_log_sec",
-            default_value="5.0",
-            description="V13.1 seconds between collision guard statistics logs.",
-        ),
-        DeclareLaunchArgument(
-            "collision_guard_block_log_sec",
-            default_value="2.0",
-            description="V13.1 minimum seconds between blocked-motion warnings.",
-        ),
         SetEnvironmentVariable("ISAAC_PATH", isaac_path),
         SetEnvironmentVariable("ARENA_ISAAC_IDLE_FPS", idle_fps),
         SetEnvironmentVariable("ARENA_ISAAC_ACTIVE_FPS", active_fps),
@@ -208,13 +166,6 @@ def generate_launch_description():
         SetEnvironmentVariable("ARENA_ISAAC_SCENE_COLLISION_DOOR_DEFAULT_ENABLED", scene_collision_door_default_enabled),
         SetEnvironmentVariable("ARENA_ISAAC_SCENE_COLLISION_WALL_DEFAULT_ENABLED", scene_collision_wall_default_enabled),
         SetEnvironmentVariable("ARENA_ISAAC_COLLISION_PROXY_EXPORT_PATH", scene_collision_proxy_export_path),
-        SetEnvironmentVariable("ARENA_ISAAC_ENABLE_KINEMATIC_COLLISION_GUARD", enable_kinematic_collision_guard),
-        SetEnvironmentVariable("ARENA_ISAAC_COLLISION_GUARD_LENGTH", collision_guard_length),
-        SetEnvironmentVariable("ARENA_ISAAC_COLLISION_GUARD_WIDTH", collision_guard_width),
-        SetEnvironmentVariable("ARENA_ISAAC_COLLISION_GUARD_MARGIN", collision_guard_margin),
-        SetEnvironmentVariable("ARENA_ISAAC_COLLISION_GUARD_Z_MAX", collision_guard_z_max),
-        SetEnvironmentVariable("ARENA_ISAAC_COLLISION_GUARD_LOG_SEC", collision_guard_log_sec),
-        SetEnvironmentVariable("ARENA_ISAAC_COLLISION_GUARD_BLOCK_LOG_SEC", collision_guard_block_log_sec),
         ExecuteProcess(
             cmd=[
                 PathJoinSubstitution([isaac_path, "python.sh"]),

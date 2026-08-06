@@ -21,11 +21,13 @@ class TestPhysxDiffProfile(unittest.TestCase):
     def setUpClass(cls):
         cls.profile = profile_module.load_profile(str(PROFILE_PATH))
 
-    def test_spawn_phase_selects_contact_asset_without_changing_default(self):
+    def test_spawn_phase_selects_contact_asset_by_default_and_for_rtx_scan(self):
         default_cmd = profile_module.spawn_cmd(self.profile)
+        rtx_cmd = profile_module.spawn_cmd(self.profile, "rtx_scan")
         contact_cmd = profile_module.spawn_cmd(self.profile, "physx_diff_contact")
 
-        self.assertIn("mecanum730_xms5_lidar_physx_wheels", default_cmd)
+        self.assertIn("mecanum730_xms5_lidar_physx_diff_contact", default_cmd)
+        self.assertIn("mecanum730_xms5_lidar_physx_diff_contact", rtx_cmd)
         self.assertIn("mecanum730_xms5_lidar_physx_diff_contact", contact_cmd)
         urdf = contact_cmd[contact_cmd.index("--urdf-path") + 1]
         self.assertTrue(urdf.endswith("mecanum730_xms5_physx_diff_contact.urdf"))
@@ -34,27 +36,24 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(contact_cmd[contact_cmd.index("--z") + 1], "0.03")
 
     def test_profile_composes_explicit_mode_files(self):
-        self.assertEqual(self.profile["default_mode"], "physx_wheels")
-        self.assertEqual(
-            set(self.profile["modes"]),
-            {"physx_wheels", "physx_diff_contact"},
-        )
-        self.assertTrue((MODE_DIR / "physx_wheels.yaml").is_file())
-        self.assertTrue((MODE_DIR / "physx_diff_contact.yaml").is_file())
+        self.assertEqual(self.profile["default_mode"], "physx_diff_contact")
+        self.assertEqual(set(self.profile["modes"]), {"physx_diff_contact"})
+        mode_files = sorted(path.name for path in MODE_DIR.glob("*.yaml"))
+        self.assertEqual(mode_files, ["physx_diff_contact.yaml"])
         self.assertEqual(
             self.profile["phases"]["physx_diff_contact"]["mode"],
             "physx_diff_contact",
         )
+        self.assertEqual(self.profile["phases"]["rtx_scan"]["mode"], "physx_diff_contact")
 
     def test_bridge_phase_disables_guard_handoff_and_hard_sync(self):
         cmd, env = profile_module.bridge_cmd(self.profile, "physx_diff_contact")
         joined = " ".join(cmd)
-        self.assertIn("enable_kinematic_collision_guard:=false", joined)
+        self.assertNotIn("kinematic_collision_guard", joined)
         self.assertIn("enable_people_stack:=true", joined)
         self.assertIn("enable_character_services:=true", joined)
         self.assertIn("people_extension_mode:=replicator_agent_core", joined)
         self.assertIn("enable_navmesh:=false", joined)
-        self.assertEqual(env["ARENA_ISAAC_COLLISION_GUARD_BACKEND"], "none")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_ROBOT_POLICY"], "stop")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED"], "false")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"], "true")
@@ -72,6 +71,15 @@ class TestPhysxDiffProfile(unittest.TestCase):
             env["ARENA_ISAAC_PEDESTRIAN_HARD_BODY_AXIS_SAMPLE_SPACING_M"],
             "0.05",
         )
+        self.assertEqual(env["ARENA_ISAAC_ROBOT_FOOTPRINT_LENGTH"], "0.7")
+        self.assertEqual(env["ARENA_ISAAC_ROBOT_FOOTPRINT_WIDTH"], "0.42")
+        self.assertEqual(env["ARENA_ISAAC_ROBOT_FOOTPRINT_MARGIN"], "0.02")
+        self.assertTrue(
+            env["ARENA_ISAAC_PEDESTRIAN_WALKABLE_MAP_PATH"].endswith(
+                "shenxinfu_841837.walkable.json"
+            )
+        )
+        self.assertFalse(any(key.startswith("ARENA_ISAAC_COLLISION_GUARD_") for key in env))
         self.assertEqual(
             env["ARENA_ISAAC_EXTERNAL_MOTION_ANIMATION_FULL_SPEED_MPS"],
             "0.3082",
@@ -100,7 +108,6 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_LEAF_APPROXIMATION"], "convexHull")
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_FRAME_APPROXIMATION"], "sdf")
         self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_FRAME_SDF_RESOLUTION"], "512")
-        self.assertEqual(env["ARENA_ISAAC_FULL_ASSET_HANDOFF_ENABLED"], "false")
         self.assertEqual(env["ARENA_ISAAC_ARM_HOLD_HARD_SYNC"], "false")
         self.assertEqual(env["ARENA_ISAAC_DIFF_WHEEL_DRIVE_DAMPING"], "30.0")
         self.assertEqual(env["ARENA_ISAAC_DIFF_WHEEL_DRIVE_MAX_FORCE"], "300.0")
@@ -131,7 +138,7 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(env["ARENA_ISAAC_LIDAR_FRONT_TOPIC"], "/front_scan")
         self.assertEqual(env["ARENA_ISAAC_LIDAR_REAR_TOPIC"], "/rear_scan")
 
-    def test_physx_wheels_does_not_inherit_contact_wheel_parameters(self):
+    def test_rtx_scan_uses_contact_mode_without_collision_guard_envs(self):
         contact_keys = {
             "ARENA_ISAAC_DIFF_WHEEL_DRIVE_DAMPING",
             "ARENA_ISAAC_DIFF_WHEEL_DRIVE_MAX_FORCE",
@@ -151,36 +158,30 @@ class TestPhysxDiffProfile(unittest.TestCase):
             "ARENA_ISAAC_DIFF_TIRE_CONTACT_REFRESH_SEC",
             "ARENA_ISAAC_DIFF_DIAGNOSTICS_OUTPUT",
             "ARENA_ISAAC_DIFF_DIAGNOSTICS_RUN_LABEL",
-            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_MARGIN_M",
-            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_RELEASE_HOLD_SEC",
-            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ESCAPE_HORIZON_SEC",
-            "ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_OVERLAP_DEADBAND_M",
-            "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_RADIUS_M",
-            "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_HALF_LENGTH_M",
-            "ARENA_ISAAC_PEDESTRIAN_HARD_BODY_AXIS_SAMPLE_SPACING_M",
         }
         with mock.patch.dict(os.environ, {key: "stale" for key in contact_keys}):
             command, env = profile_module.bridge_cmd(self.profile, "rtx_scan")
-        self.assertTrue(contact_keys.isdisjoint(env))
-        self.assertIn("enable_kinematic_collision_guard:=true", " ".join(command))
-        self.assertEqual(env["ARENA_ISAAC_COLLISION_GUARD_BACKEND"], "voxel")
-        self.assertEqual(env["ARENA_ISAAC_MAX_LINEAR_SPEED"], "0.8")
-        self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"], "disabled")
-        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_ROBOT_POLICY"], "avoid")
-        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED"], "true")
-        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"], "false")
+        joined = " ".join(command)
+        self.assertNotIn("kinematic_collision_guard", joined)
+        self.assertIn("enable_scene_collision_repair:=true", joined)
+        self.assertIn("scene_collision_proxy_source:=off", joined)
+        self.assertEqual(env["ARENA_ISAAC_ROBOT_FOOTPRINT_LENGTH"], "0.7")
+        self.assertEqual(env["ARENA_ISAAC_ROBOT_FOOTPRINT_WIDTH"], "0.42")
+        self.assertEqual(env["ARENA_ISAAC_ROBOT_FOOTPRINT_MARGIN"], "0.02")
+        self.assertFalse(any(key.startswith("ARENA_ISAAC_COLLISION_GUARD_") for key in env))
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_BACKEND"], "rtx")
+        self.assertEqual(env["ARENA_ISAAC_LIDAR_DEDUPLICATE"], "true")
+        self.assertEqual(env["ARENA_ISAAC_DIFF_WHEEL_DRIVE_DAMPING"], "30.0")
+        self.assertEqual(env["ARENA_ISAAC_DIFF_TIRE_FORCE_ENABLED"], "true")
+        self.assertEqual(env["ARENA_ISAAC_SCENE_DOOR_COLLISION_POLICY"], "restore_selected_meshes")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_ROBOT_POLICY"], "stop")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED"], "false")
+        self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"], "true")
 
     def test_contact_gamepad_uses_explicit_faster_limits(self):
         command = profile_module.gamepad_cmd(self.profile, "physx_diff_contact")
         self.assertIn("linear_scale:=0.4", command)
         self.assertIn("angular_scale:=0.8", command)
-
-    def test_synthetic_lidar_does_not_start_rtx_deduplication_relay(self):
-        _, env = profile_module.bridge_cmd(self.profile, "social_nav")
-
-        self.assertEqual(env["ARENA_ISAAC_LIDAR_BACKEND"], "synthetic_2d")
-        self.assertEqual(env["ARENA_ISAAC_LIDAR_DEDUPLICATE"], "false")
-
 
 if __name__ == "__main__":
     unittest.main()

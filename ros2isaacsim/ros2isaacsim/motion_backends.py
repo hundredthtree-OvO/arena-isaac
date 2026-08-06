@@ -17,7 +17,6 @@ from ros2isaacsim.physx_diff_contact import wheel_slip_diagnostics
 @dataclass(frozen=True)
 class MotionBackend:
     mode: str
-    uses_collision_guard: bool
     applies_navigation_hold: bool
     uses_measured_odom_twist: bool
 
@@ -33,39 +32,10 @@ class MotionBackend:
         raise NotImplementedError
 
 
-class PhysxWheelsBackend(MotionBackend):
-    def __init__(self) -> None:
-        super().__init__(
-            mode="physx_wheels",
-            uses_collision_guard=True,
-            applies_navigation_hold=True,
-            uses_measured_odom_twist=False,
-        )
-
-    def apply(self, robot: Any, vx: float, vy: float, wz: float, dt: float, drive_mode: str) -> None:
-        pos, quat, heading = robot._current_base_pose_for_motion()
-        vx, vy, wz, guard_mode = robot._filter_with_collision_guard(
-            pos, heading, vx, vy, wz, dt, self.mode
-        )
-        robot._applied_vx, robot._applied_vy, robot._applied_wz = float(vx), float(vy), float(wz)
-        robot._last_guard_mode = guard_mode
-        robot._publish_applied_cmd_vel()
-
-        wheel_speeds = robot._wheel_speeds(vx, vy, wz, drive_mode)
-        robot._apply_navigation_hold_targets()
-        robot._apply_joint_velocity_targets(wheel_speeds)
-        wrote = robot._apply_motion_based_root(pos, quat, vx, vy, wz, dt)
-        if not wrote and robot.config.physx_fallback_kinematic:
-            robot._apply_kinematic_base(vx, vy, wz, dt)
-            return
-        robot._publish_actual_odom_tf()
-
-
 class PhysxDiffContactBackend(MotionBackend):
     def __init__(self) -> None:
         super().__init__(
             mode="physx_diff_contact",
-            uses_collision_guard=False,
             applies_navigation_hold=False,
             uses_measured_odom_twist=True,
         )
@@ -175,8 +145,6 @@ class PhysxDiffContactBackend(MotionBackend):
 
 
 def motion_backend_for_mode(mode: str) -> Optional[MotionBackend]:
-    if mode == "physx_wheels":
-        return PhysxWheelsBackend()
     if mode == "physx_diff_contact":
         return PhysxDiffContactBackend()
     return None

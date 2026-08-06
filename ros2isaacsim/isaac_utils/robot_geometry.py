@@ -220,23 +220,21 @@ def estimate_body_footprint_from_env(robot_root_path: str, *, logger=None) -> Op
 
 
 def apply_auto_footprint_env(robot_root_path: str, *, logger=None) -> Optional[BodyFootprint]:
-    """If enabled, compute body footprint and update collision-guard env vars.
+    """If enabled, compute the footprint used by dynamic-contact checks.
 
-    The collision guard is instantiated later by the mecanum controller, so
-    setting these environment variables here is enough for the current bridge
-    process.
+    The mecanum controller reads these variables after the robot is imported.
     """
     if not _env_bool("ARENA_ISAAC_ROBOT_AUTO_FOOTPRINT", False):
         return None
     fp = estimate_body_footprint_from_env(robot_root_path, logger=logger)
     if fp is None:
         return None
-    os.environ["ARENA_ISAAC_COLLISION_GUARD_LENGTH"] = f"{fp.length:.6f}"
-    os.environ["ARENA_ISAAC_COLLISION_GUARD_WIDTH"] = f"{fp.width:.6f}"
+    os.environ["ARENA_ISAAC_ROBOT_FOOTPRINT_LENGTH"] = f"{fp.length:.6f}"
+    os.environ["ARENA_ISAAC_ROBOT_FOOTPRINT_WIDTH"] = f"{fp.width:.6f}"
     _log(
         logger,
         "info",
-        f"[robot_geometry] auto footprint applied to guard env: length={fp.length:.3f} width={fp.width:.3f}",
+        f"[robot_geometry] dynamic-contact footprint: length={fp.length:.3f} width={fp.width:.3f}",
     )
     return fp
 
