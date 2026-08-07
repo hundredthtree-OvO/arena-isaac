@@ -143,9 +143,8 @@ arm_hold:
   drive_damping: 10000.0
   drive_max_force: 100000.0
 teleop:
-  linear: 0.2
-  lateral: 0.2
-  angular: 0.5
+  rise_time_sec: 0.35
+  slow_scale: 0.35
 gamepad:
   # URDF wheel centers are at y=+/-0.1725 m, giving a 0.345 m track width.
   device_id: 0
@@ -154,10 +153,7 @@ gamepad:
   linear_axis: 1
   angular_axis: 0
   enable_button: 0
-  linear_scale: 0.2
-  angular_scale: 0.5
   deadzone: 0.1
-  joy_timeout_sec: 0.5
   priority_timeout_sec: 0.3
   track_width_m: 0.345
 pedestrians:

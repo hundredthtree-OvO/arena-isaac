@@ -21,10 +21,11 @@ def generate_launch_description():
         DeclareLaunchArgument("linear_axis", default_value="1"),
         DeclareLaunchArgument("angular_axis", default_value="0"),
         DeclareLaunchArgument("enable_button", default_value="4"),
-        DeclareLaunchArgument("linear_scale", default_value="0.2"),
-        DeclareLaunchArgument("angular_scale", default_value="0.5"),
+        DeclareLaunchArgument("linear_scale", default_value="0.4"),
+        DeclareLaunchArgument("angular_scale", default_value="0.4"),
         DeclareLaunchArgument("deadzone", default_value="0.1"),
-        DeclareLaunchArgument("joy_timeout_sec", default_value="0.5"),
+        DeclareLaunchArgument("joy_timeout_sec", default_value="0.25"),
+        DeclareLaunchArgument("publish_rate_hz", default_value="50.0"),
         Node(
             package="joy",
             executable="joy_node",
@@ -67,6 +68,9 @@ def generate_launch_description():
                 ),
                 "joy_timeout_sec": ParameterValue(
                     LaunchConfiguration("joy_timeout_sec"), value_type=float
+                ),
+                "publish_rate_hz": ParameterValue(
+                    LaunchConfiguration("publish_rate_hz"), value_type=float
                 ),
             }],
         ),

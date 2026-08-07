@@ -37,7 +37,9 @@ arm_hold:
 
 gamepad:
   linear_scale: 0.4
-  angular_scale: 0.8
+  angular_scale: 0.4
+  publish_rate_hz: 50.0
+  joy_timeout_sec: 0.25
 
 pedestrians:
   # The animated kinematic capsule must not inject impulses into the dynamic

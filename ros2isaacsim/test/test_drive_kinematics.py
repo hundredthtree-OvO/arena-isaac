@@ -8,6 +8,7 @@ from ros2isaacsim.drive_kinematics import (
     wheel_angular_speeds,
 )
 from ros2isaacsim.gamepad_diff_teleop import apply_deadzone
+from ros2isaacsim.wasd_combo_teleop import DifferentialKeyboardState
 
 
 class TestDriveKinematics(unittest.TestCase):
@@ -57,6 +58,56 @@ class TestDriveKinematics(unittest.TestCase):
         self.assertEqual(apply_deadzone(0.05, 0.1), 0.0)
         self.assertAlmostEqual(apply_deadzone(0.55, 0.1), 0.5)
         self.assertAlmostEqual(apply_deadzone(-0.55, 0.1), -0.5)
+
+    def test_keyboard_ramps_up_but_stops_immediately(self):
+        state = DifferentialKeyboardState(rise_time_sec=0.4)
+        linear, angular = state.update(
+            dt=0.1,
+            armed=True,
+            focused=True,
+            forward=True,
+            backward=False,
+            left=True,
+            right=False,
+        )
+        self.assertAlmostEqual(linear, 0.25)
+        self.assertAlmostEqual(angular, 0.25)
+        self.assertEqual(
+            state.update(
+                dt=0.1,
+                armed=False,
+                focused=True,
+                forward=True,
+                backward=False,
+                left=True,
+                right=False,
+            ),
+            (0.0, 0.0),
+        )
+
+    def test_keyboard_never_jumps_directly_into_reverse(self):
+        state = DifferentialKeyboardState(rise_time_sec=0.4)
+        state.update(
+            dt=0.4,
+            armed=True,
+            focused=True,
+            forward=True,
+            backward=False,
+            left=False,
+            right=False,
+        )
+        self.assertEqual(
+            state.update(
+                dt=0.1,
+                armed=True,
+                focused=True,
+                forward=False,
+                backward=True,
+                left=False,
+                right=False,
+            )[0],
+            0.0,
+        )
 
 
 if __name__ == "__main__":

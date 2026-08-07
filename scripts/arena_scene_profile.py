@@ -481,13 +481,15 @@ def export_cmds(profile: Dict[str, Any]) -> List[List[str]]:
 
 def teleop_cmd(profile: Dict[str, Any]) -> List[str]:
     t = profile.get("teleop", {})
-    r = profile.get("robot", {})
+    gamepad = _phase_section(profile, None, "gamepad")
     return [
         "ros2", "run", "ros2isaacsim", "wasd_combo_teleop",
-        "--topic", str(r.get("cmd_vel_topic", "/cmd_vel")),
-        "--linear", str(t.get("linear", 0.20)),
-        "--lateral", str(t.get("lateral", 0.20)),
-        "--angular", str(t.get("angular", 0.50)),
+        "--topic", str(gamepad.get("cmd_vel_topic", "/cmd_vel_gamepad_diff")),
+        "--linear", str(gamepad.get("linear_scale", 0.40)),
+        "--angular", str(gamepad.get("angular_scale", 0.40)),
+        "--rate", str(gamepad.get("publish_rate_hz", 50.0)),
+        "--rise-time", str(t.get("rise_time_sec", 0.35)),
+        "--slow-scale", str(t.get("slow_scale", 0.35)),
         "--debug",
     ]
 
@@ -506,6 +508,7 @@ def gamepad_cmd(profile: Dict[str, Any], phase: str | None = None) -> List[str]:
         f"angular_scale:={gamepad.get('angular_scale', 0.50)}",
         f"deadzone:={gamepad.get('deadzone', 0.10)}",
         f"joy_timeout_sec:={gamepad.get('joy_timeout_sec', 0.50)}",
+        f"publish_rate_hz:={gamepad.get('publish_rate_hz', 50.0)}",
     ]
 
 

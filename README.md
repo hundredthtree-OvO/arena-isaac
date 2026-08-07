@@ -38,6 +38,10 @@ cd ~/resources/arena_ws/src/arena/arena-isaac
 python3 scripts/arena_scene_profile.py --profile scripts/profiles/shenxinfu_841837.yaml teleop
 ```
 
+键盘与手柄都发布差速动作到 `/cmd_vel_gamepad_diff`，二者不要同时启动。键盘窗口需要
+保持焦点并按住 `Space`（deadman）：`W/S` 前后，`A/D` 转向，`Shift` 低速。失焦、
+松开 `Space` 或退出都会立即发布停止命令。手柄和键盘规范输出均为 50 Hz。
+
 ## 关键配置
 
 ```yaml
@@ -50,6 +54,9 @@ robot_footprint:
   width: 0.42
   margin: 0.02
 ```
+
+操作速度位于 `scripts/profiles/modes/physx_diff_contact.yaml` 的 `gamepad` 段。当前线速度
+上限为 `0.4 m/s`，角速度上限为 `0.4 rad/s`；键盘和手柄共同读取这里，避免配置漂移。
 
 `robot_footprint` 会导出到：
 

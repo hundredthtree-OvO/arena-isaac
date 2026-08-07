@@ -178,10 +178,16 @@ class TestPhysxDiffProfile(unittest.TestCase):
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_PHYSICS_PROXY_ENABLED"], "false")
         self.assertEqual(env["ARENA_ISAAC_PEDESTRIAN_HARD_GUARD_ENABLED"], "true")
 
-    def test_contact_gamepad_uses_explicit_faster_limits(self):
+    def test_contact_operator_inputs_share_real_robot_limits(self):
         command = profile_module.gamepad_cmd(self.profile, "physx_diff_contact")
         self.assertIn("linear_scale:=0.4", command)
-        self.assertIn("angular_scale:=0.8", command)
+        self.assertIn("angular_scale:=0.4", command)
+        self.assertIn("publish_rate_hz:=50.0", command)
+        keyboard = profile_module.teleop_cmd(self.profile)
+        self.assertIn("/cmd_vel_gamepad_diff", keyboard)
+        self.assertIn("--linear", keyboard)
+        self.assertIn("0.4", keyboard)
+        self.assertNotIn("--lateral", keyboard)
 
 if __name__ == "__main__":
     unittest.main()

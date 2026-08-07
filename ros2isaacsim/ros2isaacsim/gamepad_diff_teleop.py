@@ -39,10 +39,11 @@ class GamepadDiffTeleop(Node):
         self.declare_parameter("linear_axis", 1)
         self.declare_parameter("angular_axis", 0)
         self.declare_parameter("enable_button", 4)
-        self.declare_parameter("linear_scale", 0.2)
-        self.declare_parameter("angular_scale", 0.5)
+        self.declare_parameter("linear_scale", 0.4)
+        self.declare_parameter("angular_scale", 0.4)
         self.declare_parameter("deadzone", 0.1)
-        self.declare_parameter("joy_timeout_sec", 0.5)
+        self.declare_parameter("joy_timeout_sec", 0.25)
+        self.declare_parameter("publish_rate_hz", 50.0)
 
         self.joy_topic = str(self.get_parameter("joy_topic").value)
         self.output_topic = str(self.get_parameter("output_topic").value)
@@ -56,6 +57,10 @@ class GamepadDiffTeleop(Node):
             0.05,
             float(self.get_parameter("joy_timeout_sec").value),
         )
+        self.publish_rate_hz = max(
+            1.0,
+            float(self.get_parameter("publish_rate_hz").value),
+        )
 
         self.publisher = self.create_publisher(Twist, self.output_topic, 10)
         self.subscription = self.create_subscription(
@@ -64,9 +69,13 @@ class GamepadDiffTeleop(Node):
             self._joy_callback,
             qos_profile_sensor_data,
         )
-        self.timer = self.create_timer(0.05, self._watchdog)
+        self.timer = self.create_timer(
+            1.0 / self.publish_rate_hz,
+            self._publish_latest,
+        )
         self._enabled = False
         self._last_joy_time = 0.0
+        self._latest_command = (0.0, 0.0)
         self._warned_mapping = False
 
         self.get_logger().info(
@@ -75,7 +84,7 @@ class GamepadDiffTeleop(Node):
             f"angular:{self.angular_axis}), "
             f"deadman_button={self.enable_button}, "
             f"scales=({self.linear_scale:.3f}, "
-            f"{self.angular_scale:.3f})"
+            f"{self.angular_scale:.3f}), rate={self.publish_rate_hz:.1f} Hz"
         )
 
     def _publish(self, vx: float, wz: float) -> None:
@@ -113,19 +122,25 @@ class GamepadDiffTeleop(Node):
             wz = apply_deadzone(
                 axis_value(msg.axes, self.angular_axis), self.deadzone
             )
-            self._publish(vx * self.linear_scale, wz * self.angular_scale)
+            self._latest_command = (
+                vx * self.linear_scale,
+                wz * self.angular_scale,
+            )
         elif self._enabled:
             # Publish one stop on release, then become silent so keyboard
             # can resume after the controller's gamepad priority timeout.
             self._publish(0.0, 0.0)
+            self._latest_command = (0.0, 0.0)
         self._enabled = enabled
 
-    def _watchdog(self) -> None:
+    def _publish_latest(self) -> None:
         if not self._enabled:
             return
         if time.monotonic() - self._last_joy_time <= self.joy_timeout_sec:
+            self._publish(*self._latest_command)
             return
         self._publish(0.0, 0.0)
+        self._latest_command = (0.0, 0.0)
         self._enabled = False
         self.get_logger().warning(
             "Gamepad input timed out; published stop command."
